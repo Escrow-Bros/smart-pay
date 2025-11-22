@@ -1,0 +1,3 @@
+spoon-ai-sdk
+openai
+python-dotenv
