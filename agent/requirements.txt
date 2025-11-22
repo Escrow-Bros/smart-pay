@@ -1,3 +1,6 @@
 spoon-ai-sdk
 openai
 python-dotenv
+fastapi
+uvicorn[standard]
+pydantic
