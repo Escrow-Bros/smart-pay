@@ -202,7 +202,7 @@ class JobAnalysisResponse(BaseModel):
     status: str  # "complete" | "needs_clarification" | "mismatch"
     data: dict
     validation: ValidationResult
-    acceptance_criteria: List[str]
+    task_description: List[str] # Renamed from acceptance_criteria
     clarifying_questions: List[str]
     message: str
 
@@ -252,7 +252,7 @@ async def analyze_job(
     - status: "complete" | "needs_clarification" | "mismatch"
     - data: Extracted task, location, price
     - validation: Clarity and image verification results
-    - acceptance_criteria: Auto-generated success criteria
+    - task_description: Auto-generated success criteria (checklist)
     - clarifying_questions: Questions if description is vague
     
     **Validation Mode:** STRICT (blocks submission if validation fails)
@@ -291,7 +291,7 @@ async def analyze_job(
             status=result["status"],
             data=result["data"],
             validation=ValidationResult(**result["validation"]),
-            acceptance_criteria=result["acceptance_criteria"],
+            task_description=result["task_description"], # Renamed from acceptance_criteria
             clarifying_questions=result["clarifying_questions"],
             message=message_text
         )

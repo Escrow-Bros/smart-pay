@@ -50,7 +50,7 @@ class ParalegalConfig:
     VALIDATION_MODE = "strict"  # block submission if validation fails
     
     # Required fields
-    REQUIRED_FIELDS = ["task", "location", "price_amount", "price_currency"]
+    REQUIRED_FIELDS = ["task", "task_description", "location", "price_amount", "price_currency"]
 
 # --- LOGIC A: CLARITY VALIDATION ---
 async def validate_clarity(text: str, extracted_data: dict) -> dict:
@@ -70,12 +70,13 @@ async def validate_clarity(text: str, extracted_data: dict) -> dict:
     # Quick check: If all required fields are extracted, it's clear enough!
     missing = extracted_data.get("missing_fields", [])
     
-    # If we have task, location, and price - it's good enough
+    # If we have task, description, location, and price - it's good enough
     has_task = extracted_data.get("task") is not None
+    has_description = extracted_data.get("task_description") is not None
     has_location = extracted_data.get("location") is not None
     has_price = extracted_data.get("price_amount") is not None
     
-    if has_task and has_location and has_price:
+    if has_task and has_description and has_location and has_price:
         # All critical info present - grammar doesn't matter
         return {
             "is_clear": True,
@@ -95,8 +96,9 @@ Extracted: {json.dumps(extracted_data)}
 
 ONLY flag as unclear if:
 1. Task is completely missing or incomprehensible
-2. Location is completely missing (no address, no GPS, nothing)
-3. Price is completely missing
+2. Description of what needs to be done is missing
+3. Location is completely missing
+4. Price is completely missing
 
 IGNORE:
 - Grammar mistakes
@@ -112,9 +114,9 @@ Return ONLY valid JSON:
 }}
 
 Examples:
-- "Clean my wall" → NOT clear (no location)
-- "Clean paper at 33 South St for 10 GAS" → CLEAR (has all 3)
-- "Fix it" → NOT clear (no task details, no location, no price)
+- "Clean my wall" → NOT clear (no price, no location)
+- "Clean paper at 123 Main St for 10 GAS" → CLEAR (has task, description, location, price)
+- "Fix it" → NOT clear (no task details, no price)
 """
     
     try:
@@ -133,7 +135,7 @@ Examples:
     except Exception as e:
         print(f"⚠️ Clarity validation failed: {e}")
         # If validation fails but we have all fields, pass it through
-        if has_task and has_location and has_price:
+        if has_task and has_description and has_location and has_price:
             return {"is_clear": True, "issues": [], "questions": []}
         # Otherwise, ask for missing fields
         return {
@@ -143,7 +145,7 @@ Examples:
         }
 
 # --- LOGIC B: VISUAL VERIFICATION ---
-async def verify_image_match(text: str, task: str, image_bytes: bytes) -> dict:
+async def verify_image_match(text: str, task: str, task_description: str, image_bytes: bytes) -> dict:
     """
     Compare text description to reference image using Vision AI
     
@@ -153,7 +155,8 @@ async def verify_image_match(text: str, task: str, image_bytes: bytes) -> dict:
     
     Args:
         text: Full job description from client
-        task: Extracted task description
+        task: Extracted task summary
+        task_description: Detailed task description
         image_bytes: Reference photo bytes
     
     Returns:
@@ -182,21 +185,26 @@ async def verify_image_match(text: str, task: str, image_bytes: bytes) -> dict:
         # Step 3: Build vision prompt
         vision_prompt = f"""Analyze this reference image and compare it to the job description.
 
-JOB DESCRIPTION: "{text}"
-TASK EXTRACTED: "{task}"
+JOB DESCRIPTION (Raw): "{text}"
+TASK SUMMARY: "{task}"
+TASK DETAILS: "{task_description}"
 
 Your job:
 1. Describe what you see in the image (be specific about objects, condition, location details)
-2. Determine if the image matches what the text describes
-3. If the text mentions a problem (graffiti, broken, dirty, needs painting), verify it's visible in the image
-4. If the text mentions a location/object, verify the image shows that location/object
+2. Determine if the image matches the CONTEXT of the job description.
+   - If the user wants to "fix" or "make" something, the image should show the BEFORE state (e.g. broken window, gravel road).
+   - If the user wants to "clean" something, the image should show the DIRTY state.
+   - If the user describes a location, the image should show that location.
 
-Be STRICT:
-- "Paint wall" + image shows door → MISMATCH
-- "Clean graffiti on wall" + image shows clean wall → MISMATCH (no graffiti visible)
-- "Fix broken window" + image shows intact window → MISMATCH (nothing broken)
-- "Paint bedroom wall blue" + image shows bedroom wall → MATCH
-- "Clean dirty floor" + image shows dirty floor → MATCH
+Be LENIENT:
+- "Make a tar road" + image shows gravel road → MATCH (shows the before state)
+- "Fix broken window" + image shows broken window → MATCH (shows the problem)
+- "Paint wall" + image shows unpainted wall → MATCH (shows the canvas)
+- "Clean graffiti" + image shows graffiti → MATCH (shows the problem)
+
+ONLY flag as MISMATCH if:
+- The image shows something completely unrelated (e.g. "Fix window" but image shows a car).
+- The image shows the work is ALREADY DONE (e.g. "Fix window" but image shows a perfect window).
 
 Return ONLY valid JSON:
 {{
@@ -447,6 +455,7 @@ async def analyze_job_request(text: str, reference_image: bytes) -> dict:
                 "image_mismatch": False,
                 "mismatch_details": None
             },
+            "task_description": [extracted_data.get("task_description") or ""], # Handle None safely
             "acceptance_criteria": [],
             "clarifying_questions": clarity_result["questions"]
         }
@@ -455,6 +464,7 @@ async def analyze_job_request(text: str, reference_image: bytes) -> dict:
     vision_result = await verify_image_match(
         text,
         extracted_data.get("task", ""),
+        extracted_data.get("task_description", ""),
         reference_image
     )
     
@@ -469,6 +479,7 @@ async def analyze_job_request(text: str, reference_image: bytes) -> dict:
                 "mismatch_details": vision_result["mismatch_reason"],
                 "image_shows": vision_result["image_shows"]
             },
+            "task_description": [extracted_data.get("task_description") or ""], # Handle None safely
             "acceptance_criteria": [],
             "clarifying_questions": []
         }
@@ -498,15 +509,16 @@ async def analyze_job_request(text: str, reference_image: bytes) -> dict:
             "mismatch_details": None,
             "image_shows": vision_result.get("image_shows", "")
         },
-        "acceptance_criteria": criteria,
+        "task_description": [extracted_data.get("task_description") or ""], # Handle None safely
+        "acceptance_criteria": criteria, # Keep criteria for internal use/verification plan
         "verification_plan": verification_plan,  # NEW: For Eye agent
-        "reference_analysis": reference_analysis,  # NEW: Baseline features
+        "reference_analysis": reference_analysis,  # NEW: Baseline features + Metadata
         "clarifying_questions": []
     }
 
 # --- HELPER: BASIC DATA EXTRACTION ---
 async def _extract_basic_data(text: str) -> dict:
-    """Extract task, location, price from text (original logic)"""
+    """Extract task, description, location, price from text"""
     config = ConfigurationManager()
     manager = LLMManager(config)
     
@@ -517,18 +529,19 @@ Text: "{text}"
 
 Return ONLY valid JSON:
 {{
-  "task": "string or null",
-  "location": "string or null",
-  "price_amount": number or null,
-  "price_currency": "string or null",
-  "missing_fields": ["field1", "field2"]
+  "task": "short summary of task (e.g. 'Fix Window') or null if missing",
+  "task_description": "rephrased, clear, and professional description of what exactly needs to be done based on the text or null if missing",
+  "location": "address or location description or null if missing",
+  "price_amount": number or null if missing,
+  "price_currency": "string or null if missing",
+  "missing_fields": ["list", "of", "missing", "fields"]
 }}
 
 Rules:
 - If currency is '$', use 'USD'
 - If currency missing but amount exists, use 'GAS'
-- Location can be: addresses, apartment numbers, building names
 - Do not invent data
+- If a field is missing, set it to null AND add it to missing_fields list
 """
     
     try:
@@ -542,10 +555,11 @@ Rules:
         print(f"⚠️ Extraction failed: {e}")
         return {
             "task": None,
+            "task_description": None,
             "location": None,
             "price_amount": None,
             "price_currency": None,
-            "missing_fields": ["task", "location", "price_amount", "price_currency"]
+            "missing_fields": ["task", "task_description", "location", "price_amount", "price_currency"]
         }
 
 # --- HELPER: REFERENCE PHOTO ANALYSIS ---
@@ -554,14 +568,6 @@ async def analyze_reference_photo(image_bytes: bytes) -> dict:
     Analyze reference photo to extract baseline features
     
     This helps the Eye agent detect if proof photo is of same location
-    
-    Returns:
-        {
-            "baseline_features": [str],  # Identifiable landmarks
-            "estimated_dimensions": str,  # Size estimation
-            "color_info": dict,  # Dominant colors
-            "notable_objects": [str]  # Key objects to match
-        }
     """
     
     # TODO: Implement actual image analysis when vision is available
@@ -576,13 +582,6 @@ async def analyze_reference_photo(image_bytes: bytes) -> dict:
         "color_info": {},
         "notable_objects": ["to_be_analyzed"]
     }
-    
-    # TODO: When vision is available, analyze:
-    # - Identifiable features (outlets, switches, doors, windows)
-    # - Object positions and sizes
-    # - Dominant colors
-    # - Lighting conditions
-    # - Unique markers
 
 # --- TEST EXECUTION ---
 async def _run_tests():
