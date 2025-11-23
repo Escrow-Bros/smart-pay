@@ -77,7 +77,6 @@ class UniversalEyeAgent:
         self,
         proof_photos: List[str],
         job_id: str,
-        worker_id: Optional[str] = None,
         worker_location: Optional[Dict] = None
     ) -> Dict:
         """
@@ -943,7 +942,6 @@ Make conservative assessment (you cannot see images). Return JSON."""
 async def verify_work(
     proof_photos: List[str],
     job_id: str,
-    worker_id: Optional[str] = None,
     worker_location: Optional[Dict] = None
 ) -> Dict:
     """
@@ -980,7 +978,7 @@ async def verify_work(
             print(f"❌ REJECTED: {result['reason']}")
     """
     agent = UniversalEyeAgent()
-    return await agent.verify(proof_photos, job_id, worker_id, worker_location)
+    return await agent.verify(proof_photos, job_id, worker_location)
 
 
 # ============================================================================
@@ -990,7 +988,6 @@ async def verify_work(
 def verify_work_sync(
     proof_photos: List[str],
     job_id: str,
-    worker_id: Optional[str] = None,
     worker_location: Optional[Dict] = None
 ) -> Dict:
     """
@@ -1000,7 +997,6 @@ def verify_work_sync(
     Args:
         proof_photos: List of IPFS URLs of worker's proof photos
         job_id: Job identifier from smart contract
-        worker_id: Optional worker address
         worker_location: Optional worker GPS location from browser/app permissions
     """
-    return asyncio.run(verify_work(proof_photos, job_id, worker_id, worker_location))
+    return asyncio.run(verify_work(proof_photos, job_id, worker_location))

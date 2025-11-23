@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Dict
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -514,7 +515,8 @@ async def submit_proof(request: SubmitProofRequest):
         # Run Eye Agent verification
         verification = await verify_work(
             proof_photos=request.proof_photos,
-            job_id=str(request.job_id)
+            job_id=str(request.job_id),
+            worker_location=request.worker_location
         )
         
         if verification.get("verified"):

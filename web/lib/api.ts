@@ -64,10 +64,11 @@ export class ApiClient {
     }
 
     async submitProof(jobId: number, proofPhotos: string[], workerLocation?: { lat: number; lng: number; accuracy: number }) {
-        const res = await fetch(`${this.baseUrl}/api/jobs/${jobId}/submit`, {
+        const res = await fetch(`${this.baseUrl}/api/jobs/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                job_id: jobId,
                 proof_photos: proofPhotos,
                 worker_location: workerLocation
             }),
