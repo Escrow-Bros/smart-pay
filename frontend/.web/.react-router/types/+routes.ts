@@ -14,6 +14,9 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/app": {
+    params: {};
+  };
   "/*": {
     params: {
       "*": string;
@@ -24,7 +27,11 @@ type Pages = {
 type RouteFiles = {
   "root.jsx": {
     id: "root";
-    page: "/" | "/*";
+    page: "/" | "/app" | "/*";
+  };
+  "routes/[app]._index.jsx": {
+    id: "routes/[app]._index";
+    page: "/app";
   };
   "routes/_index.jsx": {
     id: "routes/_index";
@@ -38,6 +45,7 @@ type RouteFiles = {
 
 type RouteModules = {
   "root": typeof import("./app/root.jsx");
+  "routes/[app]._index": typeof import("./app/routes/[app]._index.jsx");
   "routes/_index": typeof import("./app/routes/_index.jsx");
   "routes/[404]._index": typeof import("./app/routes/[404]._index.jsx");
 };

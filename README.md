@@ -73,36 +73,107 @@ smart-pay/
 
 ## 🚀 Quick Start
 
-### 1. Install Dependencies
+### Prerequisites
+- Python 3.10 or higher
+- pip (Python package manager)
+- Neo N3 TestNet access (automatic)
+
+### 1. Clone & Setup
 
 ```bash
+git clone <repository-url>
+cd smart-pay
+```
+
+### 2. Install Backend Dependencies
+
+```bash
+# Create virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+### 3. Configure Environment
+
+Create a `.env` file in the root directory:
 
 ```bash
-cp .env.example .env
-# Edit .env with your settings
+# Neo N3 Configuration
+NEO_TESTNET_RPC=https://testnet1.neo.coz.io:443/
+
+# Wallet Addresses (Generate your own using scripts/generate_wallets.py)
+CLIENT_ADDR=
+CLIENT_WIF=
+
+WORKER_ADDR=
+WORKER_WIF=
+
+AGENT_ADDR=
+AGENT_WIF=
+
+# Contract Hash
+VAULT_CONTRACT_HASH=0x2c9090b5eb4639a6c27b0bfeaba4d7680ef89775
+
+# AI Configuration
+OPENAI_API_KEY=your_api_key_here
+OPENAI_BASE_URL=https://sudoapp.dev/api/v1
+
+# IPFS Storage (4everland)
+EVERLAND_BUCKET_NAME=super-pay
+EVERLAND_ACCESS_KEY=your_access_key
+EVERLAND_SECRET_KEY=your_secret_key
+EVERLAND_ENDPOINT=https://endpoint.4everland.co/
 ```
 
-### 3. Start Backend API
+### 4. Start Backend API
 
 ```bash
+# Using start script (recommended)
 ./start_backend.sh
-# OR manually:
-cd backend && python api.py
+
+# OR manually
+cd backend
+python api.py
 ```
 
-API available at: `http://localhost:8000`
-Documentation: `http://localhost:8000/docs`
+Backend will start on: `http://localhost:8000`
+API Documentation: `http://localhost:8000/docs`
 
-### 4. Start Frontend (Coming Soon)
+### 5. Start Frontend (In a new terminal)
 
 ```bash
-cd frontend/app
+# Install frontend dependencies
+cd frontend
+pip install -r requirements.txt
+
+# Start Reflex app
 reflex run
 ```
+
+Frontend will be available at:
+- **UI:** `http://localhost:3000`
+- **Backend:** `http://localhost:8001` (Reflex internal)
+
+### 6. Access the Application
+
+1. Open browser: `http://localhost:3000`
+2. Select role: **Client** or **Worker**
+3. Wallet auto-connects based on .env configuration
+
+**Client Flow:**
+- Navigate to "Create New Job"
+- Enter job description and upload reference photos
+- Set amount in GAS
+- Submit to create escrow contract
+
+**Worker Flow:**
+- Browse "Available Jobs"
+- Click "Claim Job" to accept
+- Navigate to "My Work"
+- Upload proof photo and submit for verification
 
 ## 🔑 Key Features
 
@@ -208,14 +279,64 @@ See `backend/README.md` for complete API documentation.
 
 ## 🎯 Roadmap
 
-- [x] Smart contract deployed
+- [x] Smart contract deployed on Neo N3 TestNet
 - [x] Blockchain wrapper (NeoMCP)
 - [x] AI agents (Paralegal + Eye)
 - [x] SQLite database layer
-- [x] FastAPI backend
-- [ ] Reflex frontend integration
-- [ ] Real-time polling (10s refresh)
+- [x] FastAPI backend with 15+ endpoints
+- [x] Reflex frontend with role-based UI
+- [x] Real-time wallet integration
+- [x] Job creation and claiming
+- [x] IPFS photo storage
+- [x] AI visual verification
+- [ ] Dispute resolution system
+- [ ] Multi-signature approvals
 - [ ] MainNet deployment
+
+## 📁 Important Files
+
+### Backend
+- `backend/api.py` - FastAPI server (15 REST endpoints)
+- `backend/database.py` - SQLite ORM layer
+- `src/neo_mcp.py` - Neo N3 blockchain interactions
+- `agent/paralegal.py` - Job validation AI
+- `agent/eye.py` - Visual proof verification
+
+### Frontend
+- `frontend/app/app.py` - Main Reflex application
+- `frontend/app/states/global_state.py` - State management
+- `frontend/app/components/landing.py` - Role selection page
+- `frontend/app/components/client_view.py` - Client dashboard
+- `frontend/app/components/worker_view.py` - Worker dashboard
+
+### Contracts
+- `contracts/gigshield_vault.py` - Neo N3 smart contract (Python)
+
+## 🐛 Troubleshooting
+
+**Backend won't start:**
+```bash
+# Check if port 8000 is in use
+lsof -i :8000
+
+# Verify dependencies
+pip list | grep -E "fastapi|uvicorn|neo"
+```
+
+**Frontend errors:**
+```bash
+# Clear Reflex cache
+cd frontend
+rm -rf .web .states
+
+# Reinstall
+pip install -r requirements.txt --force-reinstall
+```
+
+**Wallet balance shows 0:**
+- Ensure backend is running on port 8000
+- Check .env has correct CLIENT_ADDR/WORKER_ADDR
+- Verify Neo TestNet RPC is accessible
 
 ## 🤝 Contributing
 

@@ -89,3 +89,13 @@ out/
 *.nef
 *.manifest.json
 
+# Reflex specific (frontend)
+.web/
+.states/
+assets/external/
+uploaded_files/
+
+# Backend specific
+backend/*.db
+backend/__pycache__/
+

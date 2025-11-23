@@ -4,17 +4,27 @@
 echo "🚀 Starting GigShield Backend API..."
 
 # Check if virtual environment exists
-if [ ! -d "venv" ]; then
+if [ ! -d ".venv" ]; then
     echo "❌ Virtual environment not found. Creating..."
-    python3 -m venv venv
+    python3 -m venv .venv
 fi
 
 # Activate virtual environment
-source venv/bin/activate
+source .venv/bin/activate
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-pip install -q -r requirements.txt
+# Check if key dependencies are installed
+echo "📦 Checking dependencies..."
+if ! python -c "from backend.api import app" 2>/dev/null; then
+    echo "   Installing missing dependencies..."
+    pip install -q -r requirements.txt || {
+        echo "❌ Failed to install dependencies"
+        echo "   Note: Some version warnings are acceptable if imports work"
+        echo "   Try running: source .venv/bin/activate && cd backend && python api.py"
+        exit 1
+    }
+else
+    echo "   ✓ All dependencies ready"
+fi
 
 # Check if .env exists
 if [ ! -f ".env" ]; then
