@@ -1,1 +1,1 @@
-# GigShield Smart Pay - Neo N3 Integration
+# GigSmartPay Smart Pay - Neo N3 Integration

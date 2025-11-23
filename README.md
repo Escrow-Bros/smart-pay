@@ -1,12 +1,12 @@
-# GigShield 🛡️
+# GigSmartPay 🛡️
 
 **Decentralized Gig Platform on Neo N3 Blockchain**
 
 AI-powered escrow system for trustless gig work: Smart contracts + Visual verification + Natural language job creation.
 
-## 🎯 What is GigShield?
+## 🎯 What is GigSmartPay?
 
-GigShield connects clients and workers through blockchain-secured gig contracts with AI verification:
+GigSmartPay connects clients and workers through blockchain-secured gig contracts with AI verification:
 
 - **Client:** Describe job in natural language → AI extracts requirements → Funds locked in smart contract
 - **Worker:** Browse available gigs → Claim job → Submit proof photos
@@ -16,7 +16,7 @@ GigShield connects clients and workers through blockchain-secured gig contracts 
 
 ```
 ┌─────────────────┐
-│  Reflex Web UI  │ (Real-time wallet balance, job dashboard)
+│  Next.js Web UI │ (Real-time wallet balance, job dashboard)
 └────────┬────────┘
          │
 ┌────────▼────────┐
@@ -43,20 +43,14 @@ GigShield connects clients and workers through blockchain-secured gig contracts 
 ```
 smart-pay/
 ├── backend/
-│   ├── api.py           # FastAPI server (main entry point)
+│   ├── app.py           # FastAPI server (main entry point)
 │   ├── database.py      # SQLite layer for fast queries
-│   └── README.md        # API documentation
+│   └── agent/           # AI Agents (Eye, Paralegal)
 │
-├── frontend/
-│   └── app/             # Reflex web application
-│       ├── app.py       # Main app with mode toggle
-│       ├── components/  # UI components
-│       └── states/      # State management
-│
-├── agent/
-│   ├── paralegal.py     # Job validation AI
-│   ├── eye.py           # Visual verification AI
-│   └── storage.py       # IPFS storage
+├── web/                 # Next.js Frontend
+│   ├── app/             # App router pages
+│   ├── components/      # React components
+│   └── lib/             # API and utilities
 │
 ├── src/
 │   ├── neo_mcp.py       # Neo N3 blockchain wrapper
@@ -67,15 +61,14 @@ smart-pay/
 │
 └── scripts/
     ├── check_balances.py   # Wallet balance checker
-    ├── generate_wallets.py # Generate Neo wallets
-    └── compile_vault.py    # Compile contracts
+    └── generate_wallets.py # Generate Neo wallets
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.10 or higher
-- pip (Python package manager)
+- Node.js 18+ and npm
 - Neo N3 TestNet access (automatic)
 
 ### 1. Clone & Setup
@@ -136,7 +129,7 @@ EVERLAND_ENDPOINT=https://endpoint.4everland.co/
 
 # OR manually
 cd backend
-python api.py
+python app.py
 ```
 
 Backend will start on: `http://localhost:8000`
@@ -146,16 +139,14 @@ API Documentation: `http://localhost:8000/docs`
 
 ```bash
 # Install frontend dependencies
-cd frontend
-pip install -r requirements.txt
+cd web
+npm install
 
-# Start Reflex app
-reflex run
+# Start Next.js app
+npm run dev
 ```
 
-Frontend will be available at:
-- **UI:** `http://localhost:3000`
-- **Backend:** `http://localhost:8001` (Reflex internal)
+Frontend will be available at: `http://localhost:3000`
 
 ### 6. Access the Application
 
@@ -200,20 +191,10 @@ Frontend will be available at:
 
 **Blockchain:** Neo N3 TestNet (Smart contracts in Python)
 **Backend:** FastAPI + SQLite (Fast queries)
-**Frontend:** Reflex (Python web framework)
+**Frontend:** Next.js + Tailwind CSS
 **AI:** Sudo AI APIs (Paralegal + Eye agents)
 **Storage:** IPFS (Everland/4everland)
 **Wallet:** neo3-python library
-
-## 📊 Performance
-
-| Operation | Speed |
-|-----------|-------|
-| Database queries | <10ms |
-| Wallet balance check | ~0.5-1s |
-| Blockchain writes | ~15s |
-| IPFS upload | ~2-5s |
-| AI verification | ~3-5s |
 
 ## 🔐 Smart Contract
 
@@ -222,53 +203,22 @@ Frontend will be available at:
 Contract: 0x2c9090b5eb4639a6c27b0bfeaba4d7680ef89775
 Network: Neo N3 TestNet
 ```
+<img width="1511" height="771" alt="image" src="https://github.com/user-attachments/assets/60c17679-3ca7-43cd-9968-f236c4a88e37" />
 
-**Methods:**
-- `create_job(job_id, client, amount, details, urls)` - Lock funds
-- `assign_worker(job_id, worker)` - Claim job
-- `release_funds(job_id)` - Pay worker (agent only)
-- `get_job_status(job_id)` - Query status
+<img width="1022" height="713" alt="image" src="https://github.com/user-attachments/assets/09953052-d885-4e50-a9d9-594205720c97" />
 
-## 📖 Usage Examples
+**Test Wallet Status**
 
-### Create Job (cURL)
+<img width="1278" height="625" alt="image" src="https://github.com/user-attachments/assets/f61e21d7-9101-4c0a-9c1c-526e0c6bf934" />
 
-```bash
-curl -X POST http://localhost:8000/api/jobs/create \
-  -H "Content-Type: application/json" \
-  -d '{
-    "client_address": "NUQawTAhtXsQ2WYS6MVVeJdErXPCrWJvpV",
-    "description": "Clean garage and organize tools",
-    "reference_photos": ["https://ipfs.io/ipfs/Qm..."],
-    "amount": 5.0
-  }'
-```
+<img width="1276" height="699" alt="image" src="https://github.com/user-attachments/assets/db25f6fe-8170-48ab-9357-20e7d5285814" />
 
-### Check Balance
+<img width="1269" height="677" alt="image" src="https://github.com/user-attachments/assets/cac9f430-0081-4a5b-83d6-9cf9398d59c4" />
 
-```bash
-curl http://localhost:8000/api/wallet/balance/NUQawTAhtXsQ2WYS6MVVeJdErXPCrWJvpV
-```
-
-### List Available Jobs
-
-```bash
-curl http://localhost:8000/api/jobs/available
-```
-
-## 🧪 Testing
-
-```bash
-# Check balances
-python scripts/check_balances.py --role client
-
-# Test job creation (TestNet)
-python scripts/deposit_job.py
-```
 
 ## 🌐 API Endpoints
 
-See `backend/README.md` for complete API documentation.
+See `http://localhost:8000/docs` for complete API documentation.
 
 **Key endpoints:**
 - `GET /api/wallet/balance/{address}` - Get GAS balance
@@ -277,78 +227,6 @@ See `backend/README.md` for complete API documentation.
 - `POST /api/jobs/assign` - Worker claims job
 - `POST /api/jobs/submit` - Submit proof + AI verification
 
-## 🎯 Roadmap
-
-- [x] Smart contract deployed on Neo N3 TestNet
-- [x] Blockchain wrapper (NeoMCP)
-- [x] AI agents (Paralegal + Eye)
-- [x] SQLite database layer
-- [x] FastAPI backend with 15+ endpoints
-- [x] Reflex frontend with role-based UI
-- [x] Real-time wallet integration
-- [x] Job creation and claiming
-- [x] IPFS photo storage
-- [x] AI visual verification
-- [ ] Dispute resolution system
-- [ ] Multi-signature approvals
-- [ ] MainNet deployment
-
-## 📁 Important Files
-
-### Backend
-- `backend/api.py` - FastAPI server (15 REST endpoints)
-- `backend/database.py` - SQLite ORM layer
-- `src/neo_mcp.py` - Neo N3 blockchain interactions
-- `agent/paralegal.py` - Job validation AI
-- `agent/eye.py` - Visual proof verification
-
-### Frontend
-- `frontend/app/app.py` - Main Reflex application
-- `frontend/app/states/global_state.py` - State management
-- `frontend/app/components/landing.py` - Role selection page
-- `frontend/app/components/client_view.py` - Client dashboard
-- `frontend/app/components/worker_view.py` - Worker dashboard
-
-### Contracts
-- `contracts/gigshield_vault.py` - Neo N3 smart contract (Python)
-
-## 🐛 Troubleshooting
-
-**Backend won't start:**
-```bash
-# Check if port 8000 is in use
-lsof -i :8000
-
-# Verify dependencies
-pip list | grep -E "fastapi|uvicorn|neo"
-```
-
-**Frontend errors:**
-```bash
-# Clear Reflex cache
-cd frontend
-rm -rf .web .states
-
-# Reinstall
-pip install -r requirements.txt --force-reinstall
-```
-
-**Wallet balance shows 0:**
-- Ensure backend is running on port 8000
-- Check .env has correct CLIENT_ADDR/WORKER_ADDR
-- Verify Neo TestNet RPC is accessible
-
-## 🤝 Contributing
-
-This is a demo project for Neo N3 blockchain + AI integration.
-
 ## 📄 License
 
 MIT
-
-## 🔗 Resources
-
-- **Neo N3 Docs:** https://docs.neo.org/
-- **Reflex Docs:** https://reflex.dev/docs/
-- **FastAPI Docs:** https://fastapi.tiangolo.com/
-

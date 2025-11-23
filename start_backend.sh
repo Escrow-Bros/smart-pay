@@ -1,7 +1,7 @@
 #!/bin/bash
-# GigShield Backend Startup Script
+# GigSmartPay Backend Startup Script
 
-echo "🚀 Starting GigShield Backend API..."
+echo "🚀 Starting GigSmartPay Backend API..."
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

@@ -1,8 +1,8 @@
-# GigShield Neo N3 MCP API Documentation
+# GigSmartPay Neo N3 MCP API Documentation
 
 ## For AI Agent Team
 
-This document describes how to interact with the GigShield smart contract on Neo N3 blockchain through the NeoMCP Python wrapper.
+This document describes how to interact with the GigSmartPay smart contract on Neo N3 blockchain through the NeoMCP Python wrapper.
 
 ---
 

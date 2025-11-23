@@ -452,7 +452,7 @@ BEFORE PHOTOS (Reference):"""
             content = [
                 {
                     "type": "text",
-                    "text": f"""You are "The Eye" - an impartial AI judge for GigShield gig work platform.
+                    "text": f"""You are "The Eye" - an impartial AI judge for GigSmartPay gig work platform.
 
 TASK: "{task_description}"
 

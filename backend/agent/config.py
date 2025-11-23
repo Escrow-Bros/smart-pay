@@ -16,7 +16,7 @@ for env_path in env_paths:
 
 
 class AgentConfig:
-    """Configuration for GigShield AI Agents"""
+    """Configuration for GigSmartPay AI Agents"""
     
     # Sudo AI Configuration
     SUDO_API_KEY = os.getenv("OPENAI_API_KEY")

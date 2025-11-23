@@ -20,7 +20,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
             <div className="w-64 bg-slate-900/50 border-r border-slate-800 flex flex-col">
                 <div className="p-6 border-b border-slate-800">
                     <Link href="/" className="text-2xl font-bold text-white flex items-center gap-2">
-                        🛡️ GigShield
+                        🛡️ GigSmartPay
                     </Link>
                     <p className="text-sm text-slate-500 mt-1">Worker Mode</p>
                 </div>

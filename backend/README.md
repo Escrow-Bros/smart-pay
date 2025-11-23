@@ -1,6 +1,6 @@
-# GigShield Backend
+# GigSmartPay Backend
 
-Complete backend API for GigShield: Database + Blockchain + AI Agents
+Complete backend API for GigSmartPay: Database + Blockchain + AI Agents
 
 ## Architecture
 

@@ -71,8 +71,8 @@ class JobAnalysisResponse(BaseModel):
 # ==================== APP SETUP ====================
 
 app = FastAPI(
-    title="GigShield Unified Backend API",
-    description="Complete backend for GigShield - Database + Blockchain + AI",
+    title="GigSmartPay Unified Backend API",
+    description="Complete backend for GigSmartPay - Database + Blockchain + AI",
     version="4.0.0"
 )
 
@@ -98,7 +98,7 @@ async def root():
     """API health check"""
     return {
         "status": "online",
-        "service": "GigShield Unified Backend API",
+        "service": "GigSmartPay Unified Backend API",
         "version": "4.0.0",
         "components": {
             "database": "SQLite",
@@ -675,5 +675,5 @@ async def verify_work_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting GigShield Unified Backend API on http://localhost:8000")
+    print("🚀 Starting GigSmartPay Unified Backend API on http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
