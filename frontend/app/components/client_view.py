@@ -2,6 +2,7 @@ import reflex as rx
 
 from app.states.global_state import GlobalState
 from app.components.shared_views import my_jobs_view, wallet_view
+from app.components.location_picker import location_picker
 
 def create_job_form() -> rx.Component:
     """Job creation form."""
@@ -25,7 +26,7 @@ def create_job_form() -> rx.Component:
                     class_name="block text-sm font-medium text-slate-300 mb-2",
                 ),
                 rx.el.textarea(
-                    placeholder="Describe your task details, requirements, and expectations (e.g., 'Clean the garage and organize all tools on shelves')...",
+                    placeholder="Describe your task details, requirements, expectations, and payment amount (e.g., 'Clean the garage and organize all tools on shelves. Will pay 5 GAS.')...",
                     class_name="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none min-h-[150px] transition-all placeholder:text-slate-600 text-sm",
                     on_change=GlobalState.set_job_description,
                     value=GlobalState.job_description,
@@ -33,21 +34,35 @@ def create_job_form() -> rx.Component:
                 class_name="mb-6",
             ),
             
-            rx.el.div(
-                rx.el.label(
-                    "Payment Amount (GAS)",
-                    class_name="block text-sm font-medium text-slate-300 mb-2",
-                ),
-                rx.el.input(
-                    type="number",
-                    step="0.1",
-                    min="0.1",
-                    placeholder="5.0",
-                    class_name="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all",
-                    on_change=GlobalState.set_job_amount,
-                    value=str(GlobalState.job_amount),
-                ),
-                class_name="mb-6",
+            # Location picker component
+            location_picker(),
+            
+            # Hidden inputs to capture coordinates from JavaScript
+            rx.html(
+                """
+                <script>
+                (function() {
+                    window.addEventListener('reflexLocationSelected', function(e) {
+                        console.log('🎯 Reflex received location:', e.detail);
+                        
+                        // Store in hidden inputs that Reflex can read
+                        const latInput = document.getElementById('hidden-lat');
+                        const lngInput = document.getElementById('hidden-lng');
+                        
+                        if (latInput && lngInput) {
+                            latInput.value = e.detail.lat;
+                            lngInput.value = e.detail.lng;
+                            
+                            // Trigger change events
+                            latInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            lngInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    });
+                })();
+                </script>
+                <input type="hidden" id="hidden-lat" />
+                <input type="hidden" id="hidden-lng" />
+                """
             ),
 
             rx.el.div(

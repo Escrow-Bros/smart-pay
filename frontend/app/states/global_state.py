@@ -51,7 +51,9 @@ class GlobalState(rx.State):
     is_loading_jobs: bool = False
     
     # Job creation state
-    job_amount: float = 5.0
+    job_location: str = ""
+    job_latitude: float = 0.0
+    job_longitude: float = 0.0
     is_creating_job: bool = False
     
     # IPFS URLs for uploaded images
@@ -133,12 +135,20 @@ class GlobalState(rx.State):
         self.current_user = value
 
     @rx.event
-    def set_job_amount(self, value: str):
-        """Sets the job amount in GAS."""
-        try:
-            self.job_amount = float(value)
-        except ValueError:
-            self.job_amount = 5.0
+    def set_job_location(self, value: str):
+        """Sets the job location and extracts coordinates from input data attributes."""
+        self.job_location = value
+        # Coordinates will be read from the input element's data attributes when submitting
+    
+    @rx.event
+    def set_job_latitude(self, value: float):
+        """Sets the job latitude."""
+        self.job_latitude = value
+    
+    @rx.event
+    def set_job_longitude(self, value: float):
+        """Sets the job longitude."""
+        self.job_longitude = value
 
     @rx.event
     async def fetch_wallet_balance(self):
@@ -273,6 +283,10 @@ class GlobalState(rx.State):
             yield rx.toast.error("Please upload at least one reference photo")
             return
         
+        if not self.job_location:
+            yield rx.toast.error("Please select a location")
+            return
+        
         self.is_creating_job = True
         yield rx.toast.info("Uploading images to IPFS...")
         
@@ -295,6 +309,11 @@ class GlobalState(rx.State):
             # Create job on blockchain + database
             yield rx.toast.info("Creating job on blockchain...")
             
+            # Extract coordinates from input data attributes (set by JavaScript)
+            # If not available, use 0.0 as fallback
+            lat = self.job_latitude if self.job_latitude != 0.0 else 0.0
+            lng = self.job_longitude if self.job_longitude != 0.0 else 0.0
+            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{API_BASE_URL}/api/jobs/create",
@@ -302,7 +321,9 @@ class GlobalState(rx.State):
                         "client_address": self.current_user,
                         "description": self.job_description,
                         "reference_photos": ipfs_urls,
-                        "amount": self.job_amount
+                        "location": self.job_location,
+                        "latitude": lat,
+                        "longitude": lng
                     },
                     timeout=60.0
                 )
@@ -315,7 +336,9 @@ class GlobalState(rx.State):
                     self.job_description = ""
                     self.client_uploaded_images = []
                     self.client_ipfs_urls = []
-                    self.job_amount = 5.0
+                    self.job_location = ""
+                    self.job_latitude = 0.0
+                    self.job_longitude = 0.0
                     
                     # Refresh client jobs
                     await self.fetch_client_jobs()
