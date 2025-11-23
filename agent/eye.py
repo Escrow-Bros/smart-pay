@@ -190,33 +190,55 @@ class UniversalEyeAgent:
         
         print(f"✅ Downloaded {len(reference_images_b64)} reference + {len(proof_images_b64)} proof images")
         
-        # Step 2.5: GPS Location Verification (if both locations provided)
-        gps_verification = None
-        if job_location and worker_location:
-            print("📍 Verifying GPS location...")
-            try:
-                # Verify worker location against job location
-                gps_verification = verify_gps_location(
-                    reference_gps=job_location,
-                    proof_gps=worker_location,
-                    max_distance_meters=50.0
-                )
-                print(f"📍 GPS Verification: {gps_verification['reasoning']}")
-            except Exception as e:
-                print(f"⚠️ GPS verification error: {e}")
-                gps_verification = {
+        # GPS Location Verification (REQUIRED)
+        if not job_location:
+            raise ValueError("Job location is required for work verification")
+        
+        if not worker_location:
+            raise ValueError("Worker location is required for work verification. Please enable location services.")
+        
+        print("📍 Verifying GPS location (REQUIRED - 50m radius)...")
+        try:
+            gps_verification = verify_gps_location(
+                reference_gps=job_location,
+                proof_gps=worker_location,
+                max_distance_meters=50.0
+            )
+            print(f"📍 GPS Result: {gps_verification['reasoning']}")
+            
+            # FAIL IMMEDIATELY if location doesn't match
+            if not gps_verification["location_match"]:
+                print(f"❌ LOCATION VERIFICATION FAILED - Worker not at job site!")
+                return {
+                    "same_location": False,
+                    "same_object": False,
+                    "transformation_occurred": False,
+                    "location_confidence": 0.0,
+                    "fraud_detected": True,
+                    "visual_changes": [],
+                    "gps_verification": gps_verification,
+                    "rejection_reason": f"Location check failed: {gps_verification['reasoning']}. Worker must be within 50m of job location.",
+                    "distance_meters": gps_verification.get("distance_meters")
+                }
+            
+            print(f"✅ Location verified - Worker within {gps_verification['distance_meters']:.1f}m of job site")
+            
+        except Exception as e:
+            print(f"❌ GPS verification error: {e}")
+            return {
+                "same_location": False,
+                "same_object": False,
+                "transformation_occurred": False,
+                "location_confidence": 0.0,
+                "fraud_detected": True,
+                "visual_changes": [],
+                "gps_verification": {
                     "location_match": False,
                     "distance_meters": None,
                     "confidence": 0.0,
                     "reasoning": f"GPS verification failed: {str(e)}"
-                }
-        elif job_location and not worker_location:
-            print("⚠️ Job has location requirement but worker location not provided")
-            gps_verification = {
-                "location_match": False,
-                "distance_meters": None,
-                "confidence": 0.0,
-                "reasoning": "Worker location not provided (required for this job)"
+                },
+                "rejection_reason": f"GPS verification error: {str(e)}"
             }
         
         # Step 3: Build vision prompt with actual images
@@ -494,17 +516,31 @@ Return ONLY valid JSON:
         Multi-layer checks ensure fraud prevention
         """
         
-        # Check 0: GPS Location must match (if provided)
+        # Check 0: GPS Location must match (CRITICAL - 50m radius requirement)
         if 'gps_verification' in comparison:
             gps_check = comparison['gps_verification']
             if not gps_check.get('location_match', False):
+                distance = gps_check.get('distance_meters', 'unknown')
+                distance_text = f"{distance:.1f}m" if isinstance(distance, (int, float)) else "unknown distance"
+                
                 return {
                     "verified": False,
                     "confidence": 0.0,
-                    "reason": f"GPS location verification failed. {gps_check.get('reasoning', 'Location does not match job location.')}",
-                    "category": "GPS_MISMATCH",
-                    "issues": gps_check.get('reasoning', 'GPS coordinates do not match'),
-                    "gps_data": gps_check
+                    "verdict": "REJECTED",
+                    "reason": f"Worker location verification failed: {gps_check.get('reasoning', 'Location does not match')}",
+                    "category": "GPS_LOCATION_FAILED",
+                    "issues": [
+                        f"Worker must be within 50m of job location",
+                        f"Actual distance: {distance_text}",
+                        "Please ensure you are physically at the job site"
+                    ],
+                    "gps_data": {
+                        "distance_meters": distance,
+                        "max_allowed_meters": 50.0,
+                        "location_match": False,
+                        "reasoning": gps_check.get('reasoning')
+                    },
+                    "payment_recommended": False
                 }
         
         # Check 1: Location must match
