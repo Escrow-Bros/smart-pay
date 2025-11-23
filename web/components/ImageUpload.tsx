@@ -4,27 +4,56 @@ import { useState } from 'react';
 
 interface ImageUploadProps {
     images: { file: File; preview: string }[];
-    onAdd: (file: File) => void;
+    onAdd: (image: { file: File; preview: string }) => void;
     onRemove: (index: number) => void;
 }
 
 export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
 
-    const handleFileChange = async (files: FileList | null) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
         if (!files) return;
 
+        const MAX_SIZE_KB = 700;
+        const MAX_SIZE_BYTES = MAX_SIZE_KB * 1024;
+
         Array.from(files).forEach((file) => {
-            if (file.type.startsWith('image/')) {
-                onAdd(file);
+            // Check file size
+            if (file.size > MAX_SIZE_BYTES) {
+                alert(`Image "${file.name}" is too large (${(file.size / 1024).toFixed(0)}KB). Please upload images smaller than ${MAX_SIZE_KB}KB.`);
+                return;
             }
+
+            // Check file type (already present in original, keeping it)
+            if (!file.type.startsWith('image/')) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                onAdd({
+                    file,
+                    preview: reader.result as string,
+                });
+            };
+            reader.readAsDataURL(file);
         });
+
+        // Reset input
+        e.target.value = '';
     };
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        handleFileChange(e.dataTransfer.files);
+        // Simulate a change event for the dropped files
+        const dataTransfer = new DataTransfer();
+        Array.from(e.dataTransfer.files).forEach(file => dataTransfer.items.add(file));
+        const syntheticEvent = {
+            target: { files: dataTransfer.files, value: '' }
+        } as React.ChangeEvent<HTMLInputElement>;
+        handleFileChange(syntheticEvent);
     };
 
     return (
@@ -47,7 +76,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         type="file"
                         accept="image/*"
                         multiple
-                        onChange={(e) => handleFileChange(e.target.files)}
+                        onChange={handleFileChange}
                         className="hidden"
                     />
                     <svg className="h-10 w-10 text-slate-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,6 +90,9 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     </p>
                 </label>
             </div>
+            <p className="text-sm text-gray-400 mt-2">
+                ⚠️ Max size: 700KB per image
+            </p>
 
             {images.length > 0 && (
                 <div className="mt-3">
