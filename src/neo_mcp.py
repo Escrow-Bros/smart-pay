@@ -193,43 +193,55 @@ class NeoMCP:
     
     async def create_job_on_chain(
         self,
-        job_id: int,
-        client_role: str,
-        amount_gas: float,
-        details: str,
-        reference_urls: List[str]
+        client_address: str,
+        description: str,
+        reference_photos: List[str],
+        amount: float
     ) -> Dict[str, Any]:
         """
-        Create a new job and lock funds atomically.
+        Create a new job and lock funds atomically (API-friendly).
         
         Args:
-            job_id: Unique job identifier
-            client_role: Role name for client account ('client' by default)
-            amount_gas: Amount in GAS to lock (e.g., 10.0 for 10 GAS)
-            details: AI-generated acceptance criteria
-            reference_urls: List of IPFS URLs for reference images
+            client_address: Client Neo N3 address
+            description: Job description (used as details)
+            reference_photos: List of IPFS URLs for reference images
+            amount: Amount in GAS to lock (e.g., 10.0 for 10 GAS)
         
         Returns:
-            Dict with transaction result
+            Dict with transaction result and job_id
         """
+        import time
+        
+        # Generate job_id from timestamp
+        job_id = int(time.time())
+        
         # Pre-validation: Check if job already exists
         existing = await self.get_job_status(job_id)
         if existing['status_code'] != STATUS_NONE:
+            # Retry with incremented ID
+            job_id += 1
+        
+        # Find which role has this address
+        client_role = None
+        for role in ['client', 'worker', 'agent', 'deployer', 'treasury']:
+            if self.config.get_account_addr(role) == client_address:
+                client_role = role
+                break
+        
+        if not client_role:
             return {
                 "success": False,
-                "error": f"Job {job_id} already exists with status {existing['status_name']}",
+                "error": f"Address {client_address} not found in wallet configuration",
                 "job_id": job_id
             }
         
-        # Get client account
-        client_addr = self.config.get_account_addr(client_role)
-        client_script_hash = wallet_utils.address_to_script_hash(client_addr)
+        client_script_hash = wallet_utils.address_to_script_hash(client_address)
         
         # Convert GAS to Fixed8 format (1 GAS = 100_000_000)
-        amount = int(amount_gas * 100_000_000)
+        amount_int = int(amount * 100_000_000)
         
         # Format reference URLs
-        urls_str = ",".join(reference_urls)
+        urls_str = ",".join(reference_photos)
         
         # Get facade with client signing
         facade = self._get_facade(client_role)
@@ -239,7 +251,7 @@ class NeoMCP:
             tx_hash = await facade.invoke_fast(
                 self.contract.call_function(
                     "create_job",
-                    [job_id, client_script_hash, amount, details, urls_str]
+                    [job_id, client_script_hash, amount_int, description, urls_str]
                 )
             )
             
@@ -247,8 +259,8 @@ class NeoMCP:
                 "success": True,
                 "tx_hash": str(tx_hash),
                 "job_id": job_id,
-                "client": client_addr,
-                "amount_gas": amount_gas,
+                "client": client_address,
+                "amount": amount,
                 "note": "Transaction sent. Wait ~15s then check status."
             }
         
@@ -260,14 +272,14 @@ class NeoMCP:
     async def assign_worker_on_chain(
         self,
         job_id: int,
-        worker_role: str = "worker"
+        worker_address: str
     ) -> Dict[str, Any]:
         """
-        Assign worker to a job (first-come-first-served).
+        Assign worker to a job (first-come-first-served, API-friendly).
         
         Args:
             job_id: Job to claim
-            worker_role: Role name for worker account
+            worker_address: Worker Neo N3 address
         
         Returns:
             Dict with transaction result
@@ -282,9 +294,21 @@ class NeoMCP:
                 "current_status": status['status_name']
             }
         
-        # Get worker account
-        worker_addr = self.config.get_account_addr(worker_role)
-        worker_script_hash = wallet_utils.address_to_script_hash(worker_addr)
+        # Find which role has this address
+        worker_role = None
+        for role in ['worker', 'client', 'agent', 'deployer', 'treasury']:
+            if self.config.get_account_addr(role) == worker_address:
+                worker_role = role
+                break
+        
+        if not worker_role:
+            return {
+                "success": False,
+                "error": f"Address {worker_address} not found in wallet configuration",
+                "job_id": job_id
+            }
+        
+        worker_script_hash = wallet_utils.address_to_script_hash(worker_address)
         
         # Get facade with worker signing
         facade = self._get_facade(worker_role)
@@ -298,7 +322,7 @@ class NeoMCP:
                 "success": True,
                 "tx_hash": str(tx_hash),
                 "job_id": job_id,
-                "worker": worker_addr,
+                "worker": worker_address,
                 "note": "Transaction sent. Wait ~15s then check status."
             }
         

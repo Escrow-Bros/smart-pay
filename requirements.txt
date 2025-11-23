@@ -31,8 +31,16 @@ pycryptodome==3.23.0
 referencing==0.37.0
 requests==2.31.0
 rpds-py==0.29.0
-streamlit
 typing_extensions==4.15.0
 urllib3==2.5.0
 wheel==0.45.1
 yarl==1.22.0
+
+# Frontend framework
+reflex>=0.4.0
+
+# Backend API
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+python-multipart>=0.0.9

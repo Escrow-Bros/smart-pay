@@ -1,0 +1,252 @@
+import sqlite3
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Optional
+from contextlib import contextmanager
+
+
+class Database:
+    
+    def __init__(self, db_path: str = "gigshield.db"):
+        """Initialize database connection"""
+        self.db_path = Path(__file__).parent / db_path
+        self._init_db()
+    
+    @contextmanager
+    def get_connection(self):
+        """Context manager for database connections"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+        try:
+            yield conn
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+    
+    def _init_db(self):
+        """Create tables if they don't exist"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS jobs (
+                    job_id INTEGER PRIMARY KEY,
+                    client_address TEXT NOT NULL,
+                    worker_address TEXT,
+                    description TEXT NOT NULL,
+                    reference_photos TEXT,
+                    proof_photos TEXT,
+                    amount REAL NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    assigned_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    tx_hash TEXT,
+                    verification_result TEXT
+                )
+            """)
+            
+            # Create indexes for fast queries
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON jobs(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_client ON jobs(client_address)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_worker ON jobs(worker_address)")
+    
+    # ==================== CREATE ====================
+    
+    def create_job(
+        self,
+        job_id: int,
+        client_address: str,
+        description: str,
+        reference_photos: List[str],
+        amount: float,
+        tx_hash: str
+    ) -> Dict:
+        """Insert new job into database"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                INSERT INTO jobs (
+                    job_id, client_address, description, 
+                    reference_photos, amount, status, tx_hash
+                ) VALUES (?, ?, ?, ?, ?, 'OPEN', ?)
+            """, (
+                job_id,
+                client_address,
+                description,
+                json.dumps(reference_photos),
+                amount,
+                tx_hash
+            ))
+        
+        return self.get_job(job_id)
+    
+    # ==================== READ ====================
+    
+    def get_job(self, job_id: int) -> Optional[Dict]:
+        """Get single job by ID"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM jobs WHERE job_id = ?",
+                (job_id,)
+            )
+            row = cursor.fetchone()
+            
+            if row:
+                return self._row_to_dict(row)
+            return None
+    
+    def get_available_jobs(self) -> List[Dict]:
+        """Get all jobs with status OPEN"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM jobs 
+                WHERE status = 'OPEN' 
+                ORDER BY created_at DESC
+            """)
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
+    
+    def get_client_jobs(self, client_address: str) -> List[Dict]:
+        """Get all jobs created by a client"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM jobs 
+                WHERE client_address = ? 
+                ORDER BY created_at DESC
+            """, (client_address,))
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
+    
+    def get_worker_jobs(self, worker_address: str) -> List[Dict]:
+        """Get all jobs assigned to a worker"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM jobs 
+                WHERE worker_address = ? 
+                ORDER BY assigned_at DESC
+            """, (worker_address,))
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
+    
+    def get_worker_current_job(self, worker_address: str) -> Optional[Dict]:
+        """Get worker's currently active job (LOCKED status)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM jobs 
+                WHERE worker_address = ? AND status = 'LOCKED'
+                ORDER BY assigned_at DESC
+                LIMIT 1
+            """, (worker_address,))
+            row = cursor.fetchone()
+            
+            if row:
+                return self._row_to_dict(row)
+            return None
+    
+    # ==================== UPDATE ====================
+    
+    def assign_job(self, job_id: int, worker_address: str) -> Dict:
+        """Update job when worker claims it"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE jobs 
+                SET worker_address = ?,
+                    status = 'LOCKED',
+                    assigned_at = CURRENT_TIMESTAMP
+                WHERE job_id = ?
+            """, (worker_address, job_id))
+        
+        return self.get_job(job_id)
+    
+    def submit_proof(
+        self,
+        job_id: int,
+        proof_photos: List[str]
+    ) -> Dict:
+        """Update job with proof photos"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE jobs 
+                SET proof_photos = ?
+                WHERE job_id = ?
+            """, (json.dumps(proof_photos), job_id))
+        
+        return self.get_job(job_id)
+    
+    def complete_job(
+        self,
+        job_id: int,
+        verification_result: Dict,
+        tx_hash: str
+    ) -> Dict:
+        """Mark job as completed after payment release"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE jobs 
+                SET status = 'COMPLETED',
+                    completed_at = CURRENT_TIMESTAMP,
+                    verification_result = ?,
+                    tx_hash = ?
+                WHERE job_id = ?
+            """, (json.dumps(verification_result), tx_hash, job_id))
+        
+        return self.get_job(job_id)
+    
+    def dispute_job(self, job_id: int, reason: str) -> Dict:
+        """Mark job as disputed"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE jobs 
+                SET status = 'DISPUTED',
+                    verification_result = ?
+                WHERE job_id = ?
+            """, (json.dumps({"disputed": True, "reason": reason}), job_id))
+        
+        return self.get_job(job_id)
+    
+    # ==================== STATS ====================
+    
+    def get_worker_stats(self, worker_address: str) -> Dict:
+        """Get worker statistics"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT 
+                    COUNT(*) as total_jobs,
+                    SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'COMPLETED' THEN amount * 0.95 ELSE 0 END) as total_earnings
+                FROM jobs 
+                WHERE worker_address = ?
+            """, (worker_address,))
+            row = cursor.fetchone()
+            
+            return {
+                "total_jobs": row["total_jobs"] or 0,
+                "completed_jobs": row["completed"] or 0,
+                "total_earnings": round(row["total_earnings"] or 0, 2)
+            }
+    
+    # ==================== HELPER ====================
+    
+    def _row_to_dict(self, row: sqlite3.Row) -> Dict:
+        """Convert SQLite row to dictionary"""
+        data = dict(row)
+        
+        # Parse JSON fields
+        if data.get("reference_photos"):
+            data["reference_photos"] = json.loads(data["reference_photos"])
+        if data.get("proof_photos"):
+            data["proof_photos"] = json.loads(data["proof_photos"])
+        if data.get("verification_result"):
+            data["verification_result"] = json.loads(data["verification_result"])
+        
+        return data
+
+
+# Singleton instance
+_db_instance = None
+
+def get_db() -> Database:
+    """Get database singleton"""
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = Database()
+    return _db_instance
