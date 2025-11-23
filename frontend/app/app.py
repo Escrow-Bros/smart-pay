@@ -144,6 +144,15 @@ if (document.readyState === 'loading') {
 } else {
     setTimeout(initLocationAutocomplete, 500);
 }
+
+// Clear location data on page load to prevent stale data
+window.addEventListener('load', function() {
+    const input = document.getElementById('location-autocomplete-input');
+    if (input) {
+        input.removeAttribute('data-lat');
+        input.removeAttribute('data-lng');
+    }
+});
         """),
     ],
 )

@@ -20,6 +20,8 @@ def location_picker() -> rx.Component:
                 on_change=GlobalState.set_job_location,
                 value=GlobalState.job_location,
                 autocomplete="off",
+                name="location-input-unique",
+                key="location-input",
             ),
             rx.el.div(
                 id="location-suggestions",

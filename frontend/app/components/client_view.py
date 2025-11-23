@@ -30,6 +30,8 @@ def create_job_form() -> rx.Component:
                     class_name="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none min-h-[150px] transition-all placeholder:text-slate-600 text-sm",
                     on_change=GlobalState.set_job_description,
                     value=GlobalState.job_description,
+                    autocomplete="off",
+                    name="job-description-unique",
                 ),
                 class_name="mb-6",
             ),

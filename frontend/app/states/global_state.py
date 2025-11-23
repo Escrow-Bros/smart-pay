@@ -438,6 +438,12 @@ class GlobalState(rx.State):
     @rx.event
     async def start_polling(self):
         """Start polling for real-time updates (every 10 seconds)."""
+        # Clear form data on page load
+        self.job_description = ""
+        self.job_location = ""
+        self.job_latitude = 0.0
+        self.job_longitude = 0.0
+        
         if self.wallet_address:
             async for _ in self.fetch_wallet_balance():
                 pass
