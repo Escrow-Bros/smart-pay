@@ -44,6 +44,7 @@ export class ApiClient {
         latitude: number;
         longitude: number;
         amount: number;
+        verification_plan: Record<string, any>;
     }) {
         const res = await fetch(`${this.baseUrl}/api/jobs/create`, {
             method: 'POST',
@@ -62,11 +63,14 @@ export class ApiClient {
         return res.json();
     }
 
-    async submitProof(jobId: number, proofPhotos: string[]) {
-        const res = await fetch(`${this.baseUrl}/api/jobs/submit`, {
+    async submitProof(jobId: number, proofPhotos: string[], workerLocation?: { lat: number; lng: number; accuracy: number }) {
+        const res = await fetch(`${this.baseUrl}/api/jobs/${jobId}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ job_id: jobId, proof_photos: proofPhotos }),
+            body: JSON.stringify({
+                proof_photos: proofPhotos,
+                worker_location: workerLocation
+            }),
         });
         return res.json();
     }
@@ -81,6 +85,18 @@ export class ApiClient {
         });
         const data = await res.json();
         return data.ipfs_url;
+    }
+
+    async uploadToIpfs(file: File): Promise<string> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`${this.baseUrl}/api/ipfs/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await res.json();
+        return data.url;
     }
 }
 

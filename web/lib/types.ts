@@ -18,6 +18,7 @@ export interface JobDict {
         verified: boolean;
         verdict: string;
     } | null;
+    verification_plan?: Record<string, any>;
 }
 
 export interface WorkerStats {
@@ -51,7 +52,7 @@ export interface GlobalState {
     jobLocation: string;
     jobLatitude: number;
     jobLongitude: number;
-    clientUploadedImages: string[];
+    clientUploadedImages: { file: File; preview: string }[];
     clientIpfsUrls: string[];
     isCreatingJob: boolean;
     creationLog: string[];

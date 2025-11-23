@@ -30,6 +30,7 @@ class Database:
     def _init_db(self):
         """Create tables if they don't exist"""
         with self.get_connection() as conn:
+            # Create tables if they don't exist
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     job_id INTEGER PRIMARY KEY,
@@ -47,9 +48,22 @@ class Database:
                     assigned_at TIMESTAMP,
                     completed_at TIMESTAMP,
                     tx_hash TEXT,
-                    verification_result TEXT
+                    verification_result TEXT,
+                    acceptance_criteria TEXT
                 )
             """)
+            
+            # Migration: Add acceptance_criteria column if it doesn't exist
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN acceptance_criteria TEXT")
+            except sqlite3.OperationalError:
+                pass
+
+            # Migration: Add verification_plan column if it doesn't exist
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN verification_plan TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             # Create indexes for fast queries
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON jobs(status)")
@@ -68,7 +82,8 @@ class Database:
         tx_hash: str,
         location: str = "",
         latitude: float = 0.0,
-        longitude: float = 0.0
+        longitude: float = 0.0,
+        verification_plan: Dict = None
     ) -> Dict:
         """Insert new job into database"""
         with self.get_connection() as conn:
@@ -76,8 +91,9 @@ class Database:
                 INSERT INTO jobs (
                     job_id, client_address, description, 
                     location, latitude, longitude,
-                    reference_photos, amount, status, tx_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+                    reference_photos, amount, status, tx_hash,
+                    verification_plan
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)
             """, (
                 job_id,
                 client_address,
@@ -87,7 +103,8 @@ class Database:
                 longitude,
                 json.dumps(reference_photos),
                 amount,
-                tx_hash
+                tx_hash,
+                json.dumps(verification_plan or {})
             ))
         
         return self.get_job(job_id)
@@ -228,10 +245,16 @@ class Database:
             """, (worker_address,))
             row = cursor.fetchone()
             
+            if row:
+                return {
+                    "total_jobs": row["total_jobs"] or 0,
+                    "completed_jobs": row["completed"] or 0,
+                    "total_earnings": round(row["total_earnings"] or 0, 2)
+                }
             return {
-                "total_jobs": row["total_jobs"] or 0,
-                "completed_jobs": row["completed"] or 0,
-                "total_earnings": round(row["total_earnings"] or 0, 2)
+                "total_jobs": 0,
+                "completed_jobs": 0,
+                "total_earnings": 0
             }
     
     # ==================== HELPER ====================
@@ -247,6 +270,10 @@ class Database:
             data["proof_photos"] = json.loads(data["proof_photos"])
         if data.get("verification_result"):
             data["verification_result"] = json.loads(data["verification_result"])
+        if data.get("acceptance_criteria"):
+            data["acceptance_criteria"] = json.loads(data["acceptance_criteria"])
+        if data.get("verification_plan"):
+            data["verification_plan"] = json.loads(data["verification_plan"])
         
         return data
     

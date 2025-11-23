@@ -42,8 +42,9 @@ interface AppContextType {
     selectRole: (isClient: boolean) => void;
     setJobDescription: (desc: string) => void;
     setJobLocation: (loc: string, lat: number, lng: number) => void;
-    addUploadedImage: (filename: string) => void;
+    addUploadedImage: (file: File) => void;
     removeUploadedImage: (index: number) => void;
+    clearUploadedImages: () => void;
     createJob: () => Promise<void>;
     claimJob: (jobId: number) => Promise<void>;
     fetchData: () => Promise<void>;
@@ -111,10 +112,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
     };
 
-    const addUploadedImage = (filename: string) => {
+    const addUploadedImage = (file: File) => {
+        const preview = URL.createObjectURL(file);
         setState(prev => ({
             ...prev,
-            clientUploadedImages: [...prev.clientUploadedImages, filename],
+            clientUploadedImages: [...prev.clientUploadedImages, { file, preview }],
         }));
     };
 
@@ -122,6 +124,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setState(prev => ({
             ...prev,
             clientUploadedImages: prev.clientUploadedImages.filter((_, i) => i !== index),
+        }));
+    };
+
+    const clearUploadedImages = () => {
+        setState(prev => ({
+            ...prev,
+            clientUploadedImages: [],
         }));
     };
 
@@ -186,6 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 setJobLocation,
                 addUploadedImage,
                 removeUploadedImage,
+                clearUploadedImages,
                 createJob,
                 claimJob,
                 fetchData,

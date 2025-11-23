@@ -31,6 +31,7 @@ class CreateJobRequest(BaseModel):
     latitude: float = 0.0
     longitude: float = 0.0
     reference_photos: List[str]  # IPFS URLs
+    verification_plan: dict
     amount: float
 
 class AssignJobRequest(BaseModel):
@@ -40,6 +41,7 @@ class AssignJobRequest(BaseModel):
 class SubmitProofRequest(BaseModel):
     job_id: int
     proof_photos: List[str]  # IPFS URLs
+    worker_location: Optional[Dict[str, float]] = None  # {lat: float, lng: float, accuracy: float}
 
 class ValidationResult(BaseModel):
     clarity_issues: List[str]
@@ -62,6 +64,7 @@ class JobAnalysisResponse(BaseModel):
     clarifying_questions: List[str]
     message: str
     balance_check: Optional[BalanceCheck] = None
+    verification_plan: Optional[dict] = None
 
 
 # ==================== APP SETUP ====================
@@ -257,7 +260,12 @@ async def analyze_job(
             raise HTTPException(status_code=400, detail="Invalid file type. Must be an image")
 
         # 1. Paralegal analysis with location
-        result = await analyze_job_request(message, image_bytes, location=location)
+        result = await analyze_job_request(
+            message, 
+            image_bytes, 
+            location=location,
+            mime_type=reference_image.content_type
+        )
         
         # 2. Balance check (if client address and amount provided)
         balance_check = None
@@ -289,12 +297,33 @@ async def analyze_job(
             clarifying_questions=result["clarifying_questions"],
             message=message_text,
             balance_check=balance_check,
+            verification_plan=result.get("verification_plan")
         )
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to analyze job: {str(e)}")
+
+
+@app.post("/api/ipfs/upload")
+async def upload_to_ipfs_endpoint(file: UploadFile = File(...)):
+    """Upload a file to IPFS and return the hash URL"""
+    try:
+        file_bytes = await file.read()
+        if len(file_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
+            
+        # Generate a unique filename
+        filename = f"upload_{os.urandom(4).hex()}.{file.filename.split('.')[-1]}"
+        
+        ipfs_url = upload_to_ipfs(file_bytes, filename)
+        if not ipfs_url:
+            raise HTTPException(status_code=500, detail="Failed to upload to IPFS")
+            
+        return {"success": True, "url": ipfs_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"IPFS upload failed: {str(e)}")
 
 
 # ==================== JOB CREATION ====================
@@ -317,10 +346,38 @@ async def create_job(request: CreateJobRequest):
         print(f"   Amount: {request.amount} GAS")
         print(f"   Reference Photos: {len(request.reference_photos)} images")
         
+        # STRICT VALIDATION: Ensure all verification fields are present
+        if not request.description or len(request.description.strip()) < 10:
+            raise HTTPException(status_code=400, detail="Job description is required and must be at least 10 characters.")
+            
+        if not request.reference_photos:
+            raise HTTPException(status_code=400, detail="At least one reference photo is required for verification.")
+            
+        if not request.verification_plan:
+            raise HTTPException(status_code=400, detail="Verification plan is required. Please ensure AI analysis completed successfully.")
+        
+        # Format details for on-chain storage (Description + Verification Plan)
+        # This ensures the Eye agent has all context on-chain
+        full_details = request.description + "\n\n"
+        
+        vp = request.verification_plan
+        full_details += f"VERIFICATION PLAN:\n"
+        full_details += f"Category: {vp.get('task_category', 'General')}\n"
+        
+        if 'expected_transformation' in vp:
+            et = vp['expected_transformation']
+            full_details += f"Transformation:\n  Before: {et.get('before', 'N/A')}\n  After: {et.get('after', 'N/A')}\n"
+            
+        if 'verification_checklist' in vp:
+            full_details += "Checklist:\n" + "\n".join([f"  - {item}" for item in vp['verification_checklist']]) + "\n"
+            
+        if 'quality_indicators' in vp:
+            full_details += "Quality Indicators:\n" + "\n".join([f"  - {item}" for item in vp['quality_indicators']]) + "\n"
+        
         # Step 1: Create on blockchain first
         result = await mcp.create_job_on_chain(
             client_address=request.client_address,
-            description=request.description,
+            description=full_details,
             reference_photos=request.reference_photos,
             amount=request.amount
         )
@@ -332,23 +389,25 @@ async def create_job(request: CreateJobRequest):
         tx_hash = result["tx_hash"]
         
         print(f"\n✅ Blockchain job created:")
-        print(f"   Job ID: {job_id}")
+        print(f"   Job ID: {job_id} (Type: {type(job_id)})")
         print(f"   TX Hash: {tx_hash}")
         
         # Step 2: Insert into database
         job = db.create_job(
             job_id=job_id,
             client_address=request.client_address,
-            description=request.description,
+            description=request.description,  # Store original description in DB
             reference_photos=request.reference_photos,
             amount=request.amount,
             tx_hash=tx_hash,
             location=request.location,
             latitude=request.latitude,
-            longitude=request.longitude
+            longitude=request.longitude,
+            verification_plan=request.verification_plan
         )
         
         print(f"\n✅ Database job created successfully")
+        print(f"   Job Object: {job}")
         
         return {
             "success": True,

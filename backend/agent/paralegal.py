@@ -7,10 +7,14 @@ from dotenv import load_dotenv
 from spoon_ai.llm import LLMManager, ConfigurationManager
 from spoon_ai.schema import Message
 
-# Monkey patch for Sudo AI compatibility
+# ==================== SUDO AI COMPATIBILITY PATCHES ====================
+# These patches fix compatibility issues between spoon_ai library and Sudo AI proxy
+
+# PATCH 1: Fix HTTP headers (removes stainless headers, modifies user-agent)
 _original_request_init = httpx.Request.__init__
 
 def _patched_request_init(self, *args, **kwargs):
+    """Remove incompatible headers from httpx requests"""
     _original_request_init(self, *args, **kwargs)
     headers_to_remove = []
     headers_to_modify = {}
@@ -26,6 +30,31 @@ def _patched_request_init(self, *args, **kwargs):
         self.headers[name] = value
 
 httpx.Request.__init__ = _patched_request_init
+
+# PATCH 2: Remove tool_choice parameter (Sudo AI rejects it when no tools defined)
+def _patch_openai_tool_choice():
+    """Patch OpenAI client to remove tool_choice when no tools are provided"""
+    try:
+        import openai.resources.chat.completions
+        
+        # Patch AsyncCompletions.create
+        original_async_create = openai.resources.chat.completions.AsyncCompletions.create
+        
+        async def patched_async_create(self, *args, **kwargs):
+            if 'tool_choice' in kwargs and not kwargs.get('tools'):
+                # Sudo AI proxy error fix: Don't send tool_choice if no tools
+                del kwargs['tool_choice']
+            return await original_async_create(self, *args, **kwargs)
+            
+        openai.resources.chat.completions.AsyncCompletions.create = patched_async_create
+        print("✅ Applied tool_choice removal patch to OpenAI AsyncCompletions")
+        
+    except Exception as e:
+        print(f"⚠️  Could not apply tool_choice patch: {e}")
+
+_patch_openai_tool_choice()
+
+# ========================================================================
 
 load_dotenv()  # Loads from root .env
 
@@ -100,7 +129,7 @@ Return ONLY valid JSON:
         }
 
 
-async def verify_image_match(text: str, task: str, task_description: str, image_bytes: bytes) -> dict:
+async def verify_image_match(text: str, task: str, task_description: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
     """
     Compare text description to reference image using Vision AI.
     
@@ -109,6 +138,8 @@ async def verify_image_match(text: str, task: str, task_description: str, image_
     """
     try:
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        print(f"🔍 Analyzing image: Type={mime_type}, Size={len(image_bytes)} bytes, Base64 len={len(image_base64)}")
+        print(f"🔍 Base64 start: {image_base64[:50]}...")
         
         from openai import AsyncOpenAI
         client = AsyncOpenAI(
@@ -156,7 +187,7 @@ Return ONLY valid JSON:
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_base64}",
+                            "url": f"data:{mime_type};base64,{image_base64}",
                             "detail": "high"
                         }
                     }
@@ -298,7 +329,7 @@ Return ONLY a JSON array of criteria strings:
         ]
 
 
-async def analyze_job_request(text: str, reference_image: bytes, location: str = None) -> dict:
+async def analyze_job_request(text: str, reference_image: bytes, location: str = None, mime_type: str = "image/jpeg") -> dict:
     """
     Intelligent job analysis with validation and criteria generation.
     
@@ -306,6 +337,7 @@ async def analyze_job_request(text: str, reference_image: bytes, location: str =
         text: Job description from user
         reference_image: Photo of current state (REQUIRED)
         location: Job location (optional, if provided separately)
+        mime_type: MIME type of the image (default: image/jpeg)
     
     Returns:
         dict: Analysis result with status, data, validation, criteria, etc.
@@ -337,7 +369,8 @@ async def analyze_job_request(text: str, reference_image: bytes, location: str =
         text,
         extracted_data.get("task", ""),
         extracted_data.get("task_description", ""),
-        reference_image
+        reference_image,
+        mime_type
     )
     
     if not vision_result["match"]:
@@ -419,7 +452,8 @@ Rules:
         response = await manager.chat(messages, model=ParalegalConfig.MODEL)
         content = response.content.replace("```json", "").replace("```", "").strip()
         return json.loads(content)
-    except Exception:
+    except Exception as e:
+        print(f"❌ Extraction error: {str(e)}")
         return {
             "task": None,
             "task_description": None,

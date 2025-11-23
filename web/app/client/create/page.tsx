@@ -7,13 +7,13 @@ import ImageUpload from '@/components/ImageUpload';
 import { apiClient } from '@/lib/api';
 
 export default function CreateJobPage() {
-    const { state, setJobDescription, setJobLocation, addUploadedImage, removeUploadedImage } = useApp();
+    const { state, setJobDescription, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages } = useApp();
 
     const [isDrafting, setIsDrafting] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
-    const [draftCriteria, setDraftCriteria] = useState('');
-    const [draftPrice, setDraftPrice] = useState(0);
-    const [draftMessage, setDraftMessage] = useState('');
+    const [draftPrice, setDraftPrice] = useState<number>(0);
+    const [draftPlan, setDraftPlan] = useState<Record<string, any> | null>(null);
+    const [draftMessage, setDraftMessage] = useState<string>('');
     const [progress, setProgress] = useState(0);
     const [logs, setLogs] = useState<string[]>([]);
 
@@ -50,20 +50,55 @@ export default function CreateJobPage() {
             // In production, you'd upload the actual file here
             // For now, we'll use a placeholder
             const blob = new Blob(['placeholder'], { type: 'image/jpeg' });
-            formData.append('reference_image', blob, state.clientUploadedImages[0]);
+            // Use the actual file if available, otherwise use placeholder
+            if (state.clientUploadedImages[0]?.file) {
+                formData.append('reference_image', state.clientUploadedImages[0].file);
+            } else {
+                formData.append('reference_image', blob, 'placeholder.jpg');
+            }
 
             const result = await apiClient.analyzeJob(formData);
 
             if (result.valid === false) {
                 alert(result.message || 'AI analysis failed. Please refine your request.');
+                if (result.success) {
+                    // Extract price
+                    if (result.data && result.data.price_amount) {
+                        setDraftPrice(result.data.price_amount);
+                    }
+
+                    // Extract verification plan
+                    if (result.verification_plan) {
+                        setDraftPlan(result.verification_plan);
+                    } else {
+                        setDraftPlan(null);
+                    }
+
+                    setDraftMessage(result.message);
+                    setIsDrafting(true);
+                }
+                setProgress(0.15);
                 setIsCreating(false);
+                setLogs([...logs, 'AI criteria attached to job details']);
                 return;
             }
 
-            setDraftCriteria(result.data?.acceptance_criteria || result.acceptance_criteria || '');
-            setDraftPrice(result.data?.suggested_price || result.suggested_price || 5.0);
-            setDraftMessage(result.message || 'Draft ready for review');
-            setIsDrafting(true);
+            if (result.success) {
+                // Extract price
+                if (result.data && result.data.price_amount) {
+                    setDraftPrice(result.data.price_amount);
+                }
+
+                // Extract verification plan
+                if (result.verification_plan) {
+                    setDraftPlan(result.verification_plan);
+                } else {
+                    setDraftPlan(null);
+                }
+
+                setDraftMessage(result.message);
+                setIsDrafting(true);
+            }
             setProgress(0.15);
             setIsCreating(false);
             setLogs([...logs, 'AI criteria attached to job details']);
@@ -80,10 +115,16 @@ export default function CreateJobPage() {
         setLogs([...logs, 'Uploading images to IPFS...']);
 
         try {
-            // In production, upload images to IPFS
-            // For now, use placeholder URLs
-            const ipfsUrls = state.clientUploadedImages.map(
-                (_, i) => `ipfs://placeholder-${i}`
+            // Upload images to IPFS
+            const ipfsUrls = await Promise.all(
+                state.clientUploadedImages.map(async (img) => {
+                    try {
+                        return await apiClient.uploadToIpfs(img.file);
+                    } catch (e) {
+                        console.error('IPFS upload failed for image', e);
+                        throw new Error('Failed to upload image to IPFS');
+                    }
+                })
             );
 
             setProgress(0.35);
@@ -97,6 +138,7 @@ export default function CreateJobPage() {
                 latitude: state.jobLatitude,
                 longitude: state.jobLongitude,
                 amount: draftPrice > 0 ? draftPrice : 5.0,
+                verification_plan: draftPlan || {},
             };
 
             console.log('Creating job:', payload);
@@ -116,11 +158,12 @@ export default function CreateJobPage() {
                 // Reset form
                 setJobDescription('');
                 setJobLocation('', 0, 0);
-                while (state.clientUploadedImages.length > 0) {
-                    removeUploadedImage(0);
-                }
+                setJobDescription('');
+                setJobLocation('', 0, 0);
+                clearUploadedImages();
                 setIsDrafting(false);
-                setDraftCriteria('');
+                setIsDrafting(false);
+                setDraftPlan(null);
                 setDraftPrice(0);
             } else {
                 throw new Error('Failed to create job');
@@ -211,12 +254,29 @@ export default function CreateJobPage() {
                     {isDrafting && (
                         <div className="mb-4">
                             <h3 className="text-slate-200 text-sm font-semibold mb-2">Contract Preview</h3>
-                            {draftCriteria && (
+                            {draftPlan && (
                                 <div className="mb-3">
-                                    <p className="text-xs text-slate-400 mb-1">Acceptance Criteria:</p>
-                                    <pre className="text-xs text-slate-300 whitespace-pre-wrap bg-slate-800 p-3 rounded">
-                                        {draftCriteria}
-                                    </pre>
+                                    <p className="text-xs text-slate-400 mb-1">Verification Plan:</p>
+                                    <div className="bg-slate-800 p-3 rounded text-xs text-slate-300">
+                                        <div className="mb-2">
+                                            <span className="font-semibold text-cyan-400">Checklist:</span>
+                                            <ul className="list-disc pl-4 mt-1 space-y-1">
+                                                {draftPlan.verification_checklist?.map((item: string, i: number) => (
+                                                    <li key={i}>{item}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        {draftPlan.quality_indicators && (
+                                            <div>
+                                                <span className="font-semibold text-cyan-400">Quality Indicators:</span>
+                                                <ul className="list-disc pl-4 mt-1 space-y-1">
+                                                    {draftPlan.quality_indicators.map((item: string, i: number) => (
+                                                        <li key={i}>{item}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             {draftPrice > 0 && (
