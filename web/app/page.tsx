@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 
 export default function Home() {
@@ -25,6 +26,15 @@ export default function Home() {
           <p className="text-sm text-slate-500 mt-2">
             AI-powered escrow • Visual verification • Natural language jobs
           </p>
+
+          <div className="mt-8">
+            <Link
+              href="/how-it-works"
+              className="inline-flex items-center gap-2 px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full text-sm font-medium transition-colors border border-slate-700 hover:border-slate-600"
+            >
+              <span>📚</span> See How It Works
+            </Link>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+import os
 
 
 class NeoConfig:
@@ -28,18 +29,34 @@ class NeoConfig:
         cls._instance = None
     
     def _load_env(self):
-        """Load environment variables from .env file"""
-        if not self.env_path.exists():
-            raise FileNotFoundError(f"Environment file not found: {self.env_path}")
-        
+        """Load environment variables from .env file or environment variables"""
         env = {}
-        for line in self.env_path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, value = line.split("=", 1)
-                env[key.strip()] = value.strip()
+        
+        # Try to load from .env file if it exists (for local development)
+        if self.env_path.exists():
+            for line in self.env_path.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    env[key.strip()] = value.strip()
+        
+        # Override with actual environment variables (for production/deployment)
+        # This allows Render/other platforms to set env vars directly
+        env_vars = [
+            "NEO_TESTNET_RPC", "VAULT_CONTRACT_HASH",
+            "DEPLOYER_WIF", "DEPLOYER_ADDR",
+            "AGENT_WIF", "AGENT_ADDR",
+            "CLIENT_WIF", "CLIENT_ADDR",
+            "WORKER_WIF", "WORKER_ADDR",
+            "TREASURY_WIF", "TREASURY_ADDR"
+        ]
+        
+        for key in env_vars:
+            value = os.getenv(key)
+            if value:
+                env[key] = value
         
         # Required settings
         self.rpc_url = self._get_required(env, "NEO_TESTNET_RPC")
@@ -61,7 +78,7 @@ class NeoConfig:
         """Get required environment variable or raise error"""
         value = env.get(key)
         if not value:
-            raise ValueError(f"Required environment variable not found: {key}")
+            raise ValueError(f"Required environment variable not found: {key}. Please set it in .env file or as an environment variable.")
         return value
     
     def get_account_wif(self, role: str) -> str:
