@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { apiClient } from '@/lib/api';
 import ImageUpload from '@/components/ImageUpload';
-import { JobDict } from '@/lib/types';
+import { JobDict, UploadedImage } from '@/lib/types';
 
 export default function WorkerCurrentJobPage() {
     const { state, fetchData } = useApp();
     const [selectedJob, setSelectedJob] = useState<JobDict | null>(null);
-    const [proofImages, setProofImages] = useState<{ file: File; preview: string }[]>([]);
+    const [proofImages, setProofImages] = useState<UploadedImage[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showLocationModal, setShowLocationModal] = useState(false);
     const [pendingSubmit, setPendingSubmit] = useState(false);
@@ -62,9 +62,8 @@ export default function WorkerCurrentJobPage() {
     // For simplicity, let's show list if not selected, or just default to first if only one
     const activeJob = selectedJob || state.currentJobs[0];
 
-    const handleAddImage = (file: File) => {
-        const preview = URL.createObjectURL(file);
-        setProofImages(prev => [...prev, { file, preview }]);
+    const handleAddImage = (image: UploadedImage) => {
+        setProofImages(prev => [...prev, image]);
     };
 
     const handleRemoveImage = (index: number) => {
