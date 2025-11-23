@@ -1,1 +1,1 @@
-# GigSmartPay Smart Pay - Neo N3 Integration
+# This file makes the src directory a Python package
