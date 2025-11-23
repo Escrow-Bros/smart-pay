@@ -11,8 +11,6 @@ import requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-import io
-from PIL import Image
 
 # Monkey-patch httpx to avoid Sudo AI blocking OpenAI SDK headers
 import httpx
@@ -627,22 +625,8 @@ Return ONLY valid JSON:
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             
-            # Resize and compress image
-            img = Image.open(io.BytesIO(response.content))
-            
-            # Convert to RGB (handles PNG alpha channel)
-            if img.mode in ('RGBA', 'P'):
-                img = img.convert('RGB')
-            
-            # Resize if dimensions exceed 1024x1024 while maintaining aspect ratio
-            img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-            
-            # Compress to JPEG
-            buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=75)
-            image_bytes = buffer.getvalue()
-            
             # Encode as base64
+            image_bytes = response.content
             image_b64 = base64.b64encode(image_bytes).decode('utf-8')
             
             return image_b64
