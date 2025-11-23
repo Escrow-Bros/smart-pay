@@ -84,3 +84,8 @@ Thumbs.db
 *.pyo
 *.pyd
 
+# Contract build outputs
+out/
+*.nef
+*.manifest.json
+
