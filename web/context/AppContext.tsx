@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { GlobalState, UserMode, JobDict, WorkerStats } from '@/lib/types';
+import { GlobalState, UserMode, JobDict, WorkerStats, UploadedImage } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 
 const CLIENT_ADDR = process.env.NEXT_PUBLIC_CLIENT_ADDR || '';
@@ -42,7 +42,7 @@ interface AppContextType {
     selectRole: (isClient: boolean) => void;
     setJobDescription: (desc: string) => void;
     setJobLocation: (loc: string, lat: number, lng: number) => void;
-    addUploadedImage: (file: File) => void;
+    addUploadedImage: (image: UploadedImage) => void;
     removeUploadedImage: (index: number) => void;
     clearUploadedImages: () => void;
     createJob: () => Promise<void>;
@@ -58,7 +58,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Restore state from localStorage on mount
     useEffect(() => {
-        const savedState = localStorage.getItem('gigshield_state');
+        const savedState = localStorage.getItem('gigsmartpay_state');
         if (savedState) {
             try {
                 const parsed = JSON.parse(savedState);
@@ -78,7 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Save critical state to localStorage whenever it changes
     useEffect(() => {
         if (isInitialized && state.walletAddress) {
-            localStorage.setItem('gigshield_state', JSON.stringify({
+            localStorage.setItem('gigsmartpay_state', JSON.stringify({
                 userMode: state.userMode,
                 currentUser: state.currentUser,
                 walletAddress: state.walletAddress,
@@ -112,11 +112,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
     };
 
-    const addUploadedImage = (file: File) => {
-        const preview = URL.createObjectURL(file);
+    const addUploadedImage = (image: UploadedImage) => {
         setState(prev => ({
             ...prev,
-            clientUploadedImages: [...prev.clientUploadedImages, { file, preview }],
+            clientUploadedImages: [...prev.clientUploadedImages, image],
         }));
     };
 

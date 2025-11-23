@@ -6,7 +6,7 @@ import { AppProvider } from '@/context/AppContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Gig Shield - Decentralized Gig Platform',
+  title: 'GigSmartPay - Decentralized Gig Platform',
   description: 'AI-powered escrow system for trustless gig work on Neo N3',
 };
 

@@ -29,6 +29,11 @@ export interface WorkerStats {
 
 export type UserMode = 'client' | 'worker';
 
+export interface UploadedImage {
+    file: File;
+    preview: string;
+}
+
 export interface GlobalState {
     userMode: UserMode | null;
     currentUser: string | null;
@@ -45,7 +50,7 @@ export interface GlobalState {
     jobLocation: string;
     jobLatitude: number;
     jobLongitude: number;
-    clientUploadedImages: { file: File; preview: string }[];
+    clientUploadedImages: UploadedImage[];
     clientIpfsUrls: string[];
     isCreatingJob: boolean;
     creationLog: string[];

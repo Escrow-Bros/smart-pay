@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { UploadedImage } from '@/lib/types';
 
 interface ImageUploadProps {
-    images: { file: File; preview: string }[];
-    onAdd: (image: { file: File; preview: string }) => void;
+    images: UploadedImage[];
+    onAdd: (image: UploadedImage) => void;
     onRemove: (index: number) => void;
 }
 
@@ -25,7 +26,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                 return;
             }
 
-            // Check file type (already present in original, keeping it)
+            // Check file type
             if (!file.type.startsWith('image/')) {
                 return;
             }
