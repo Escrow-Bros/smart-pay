@@ -1,6 +1,6 @@
 # Core Neo N3 Blockchain Dependencies
 neo-mamba==3.1.0
-neo3-boa==1.4.1
+# neo3-boa==1.4.1  # REMOVED - Only needed for contract development, not runtime
 neo3crypto==0.4.4
 base58==2.1.1
 bitarray==2.9.2
@@ -14,7 +14,7 @@ aiosignal==1.4.0
 aiodns==3.5.0
 httpx==0.28.1
 httpx-sse==0.4.1
-requests==2.31.0
+requests==2.32.3
 urllib3==2.5.0
 certifi==2025.11.12
 charset-normalizer==3.4.4
