@@ -55,7 +55,9 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg") -> Optional[
         
         # Generate public IPFS URL
         # 4Everland automatically pins to IPFS and provides gateway URL
-        public_url = f"{endpoint}/{bucket_name}/{filename}"
+        # Fix: Remove trailing slash from endpoint to avoid double slash
+        endpoint_clean = endpoint.rstrip('/')
+        public_url = f"{endpoint_clean}/{bucket_name}/{filename}"
         
         print(f"✅ Successfully uploaded to IPFS: {public_url}")
         return public_url

@@ -197,21 +197,37 @@ async def get_client_jobs(address: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/jobs/worker/{address}")
-async def get_worker_jobs(address: str):
-    """Get all jobs for a worker (history + current)"""
+
+@app.get("/api/jobs/worker/{worker_address}/current")
+async def get_worker_active_jobs(worker_address: str):
+    """Get all active jobs for a worker (LOCKED + DISPUTED)"""
     try:
-        current = db.get_worker_current_job(address)
-        history = db.get_worker_jobs(address)
-        stats = db.get_worker_stats(address)
-        
-        return {
-            "success": True,
-            "current_job": current,
-            "history": history,
-            "stats": stats
-        }
+        jobs = db.get_worker_active_jobs(worker_address)
+        return {"jobs": jobs}
     except Exception as e:
+        print(f"Error getting worker active jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/jobs/worker/{worker_address}/history")
+async def get_worker_history(worker_address: str):
+    """Get all completed jobs for a worker"""
+    try:
+        jobs = db.get_worker_completed_jobs(worker_address)
+        return {"jobs": jobs}
+    except Exception as e:
+        print(f"Error getting worker history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/jobs/worker/{worker_address}/stats")
+async def get_worker_stats(worker_address: str):
+    """Get worker statistics"""
+    try:
+        stats = db.get_worker_stats(worker_address)
+        return stats
+    except Exception as e:
+        print(f"Error getting worker stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -499,14 +515,16 @@ async def submit_proof(request: SubmitProofRequest):
     2. Call Eye Agent for verification
     3. If approved: Release funds on blockchain
     4. Update DB status
+    
+    Workers can resubmit for DISPUTED jobs to attempt reverification.
     """
     try:
-        # Check job exists and is LOCKED
+        # Check job exists and is LOCKED or DISPUTED
         job = db.get_job(request.job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         
-        if job["status"] != "LOCKED":
+        if job["status"] not in ["LOCKED", "DISPUTED"]:
             raise HTTPException(status_code=400, detail=f"Job is {job['status']}, cannot submit proof")
         
         # Update with proof photos

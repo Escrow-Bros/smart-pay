@@ -57,14 +57,18 @@ def verify_gps_location(
             "reasoning": str
         }
     """
+    print("reference_gps", reference_gps)
+    print("proof_gps", proof_gps)
     try:
         # Extract coordinates
         ref_lat = reference_gps.get("latitude")
         ref_lon = reference_gps.get("longitude")
         ref_accuracy = reference_gps.get("accuracy", 10)  # meters
         
-        proof_lat = proof_gps.get("latitude")
-        proof_lon = proof_gps.get("longitude")
+        proof_lat = proof_gps.get("lat")
+        proof_lon = proof_gps.get("lng")
+        print("proof_lat", proof_lat)
+        print("proof_lon", proof_lon)
         proof_accuracy = proof_gps.get("accuracy", 10)  # meters
         
         # Validate inputs

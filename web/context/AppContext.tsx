@@ -16,7 +16,7 @@ const initialState: GlobalState = {
     availableJobs: [],
     clientJobs: [],
     workerJobs: [],
-    currentJob: null,
+    currentJobs: [], // Changed from currentJob: null
     workerStats: { total_jobs: 0, completed_jobs: 0, total_earned: 0 },
     isLoadingJobs: false,
     jobDescription: '',
@@ -162,16 +162,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const data = await apiClient.getClientJobs(state.walletAddress);
                 setState(prev => ({ ...prev, clientJobs: data.jobs || [] }));
             } else {
-                const [availData, workerData] = await Promise.all([
+                const [availData, activeData, historyData, statsData] = await Promise.all([
                     apiClient.getAvailableJobs(),
-                    apiClient.getWorkerJobs(state.walletAddress),
+                    apiClient.getWorkerCurrentJobs(state.walletAddress),
+                    apiClient.getWorkerHistory(state.walletAddress),
+                    apiClient.getWorkerStats(state.walletAddress),
                 ]);
                 setState(prev => ({
                     ...prev,
                     availableJobs: availData.jobs || [],
-                    workerJobs: workerData.history || [],
-                    currentJob: workerData.current_job || null,
-                    workerStats: workerData.stats || prev.workerStats,
+                    workerJobs: historyData.jobs || [],
+                    currentJobs: activeData.jobs || [],
+                    workerStats: statsData || prev.workerStats,
                 }));
             }
         } catch (error) {

@@ -138,8 +138,11 @@ class NeoMCP:
         
         # Parse results
         status_code = status_result.result.stack[0].value
-        client_hash = types.UInt160(client_result.result.stack[0].value)
-        worker_hash = types.UInt160(worker_result.result.stack[0].value)
+        # Fix: Convert bytes to UInt160 properly
+        client_bytes = client_result.result.stack[0].value
+        worker_bytes = worker_result.result.stack[0].value
+        client_hash = types.UInt160(data=bytes(client_bytes)) if client_bytes else types.UInt160.zero()
+        worker_hash = types.UInt160(data=bytes(worker_bytes)) if worker_bytes else types.UInt160.zero()
         amount = amount_result.result.stack[0].value
         details = details_result.result.stack[0].value.decode('utf-8') if details_result.result.stack[0].value else ""
         urls = urls_result.result.stack[0].value.decode('utf-8') if urls_result.result.stack[0].value else ""

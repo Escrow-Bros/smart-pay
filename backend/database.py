@@ -144,30 +144,27 @@ class Database:
             """, (client_address,))
             return [self._row_to_dict(row) for row in cursor.fetchall()]
     
-    def get_worker_jobs(self, worker_address: str) -> List[Dict]:
-        """Get all jobs assigned to a worker"""
+    
+    def get_worker_completed_jobs(self, worker_address: str) -> List[Dict]:
+        """Get worker's completed jobs (history)"""
         with self.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT * FROM jobs 
-                WHERE worker_address = ? 
-                ORDER BY assigned_at DESC
+                WHERE worker_address = ? AND status = 'COMPLETED'
+                ORDER BY completed_at DESC
             """, (worker_address,))
             return [self._row_to_dict(row) for row in cursor.fetchall()]
     
-    def get_worker_current_job(self, worker_address: str) -> Optional[Dict]:
-        """Get worker's currently active job (LOCKED status)"""
+    def get_worker_active_jobs(self, worker_address: str) -> List[Dict]:
+        """Get worker's currently active jobs (LOCKED or DISPUTED status)"""
         with self.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT * FROM jobs 
-                WHERE worker_address = ? AND status = 'LOCKED'
+                WHERE worker_address = ? AND status IN ('LOCKED', 'DISPUTED')
                 ORDER BY assigned_at DESC
-                LIMIT 1
             """, (worker_address,))
-            row = cursor.fetchone()
-            
-            if row:
-                return self._row_to_dict(row)
-            return None
+            rows = cursor.fetchall()
+            return [self._row_to_dict(row) for row in rows]
     
     # ==================== UPDATE ====================
     

@@ -1,3 +1,5 @@
+import { JobDict, WorkerStats } from './types';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export class ApiClient {
@@ -23,9 +25,19 @@ export class ApiClient {
         return res.json();
     }
 
-    async getWorkerJobs(address: string) {
-        const res = await fetch(`${this.baseUrl}/api/jobs/worker/${address}`);
-        return res.json();
+    async getWorkerCurrentJobs(address: string) {
+        const res = await fetch(`${this.baseUrl}/api/jobs/worker/${address}/current`);
+        return res.json() as Promise<{ jobs: JobDict[] }>;
+    }
+
+    async getWorkerHistory(address: string) {
+        const res = await fetch(`${this.baseUrl}/api/jobs/worker/${address}/history`);
+        return res.json() as Promise<{ jobs: JobDict[] }>;
+    }
+
+    async getWorkerStats(address: string) {
+        const res = await fetch(`${this.baseUrl}/api/jobs/worker/${address}/stats`);
+        return res.json() as Promise<WorkerStats>;
     }
 
     async analyzeJob(formData: FormData) {

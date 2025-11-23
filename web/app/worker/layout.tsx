@@ -10,7 +10,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
 
     const navItems = [
         { href: '/worker/jobs', label: 'Available Jobs', icon: '🔍' },
-        { href: '/worker/current', label: 'Current Job', icon: '⚡' },
+        { href: '/worker/current', label: 'Current Jobs', icon: '⚡' },
         { href: '/worker/wallet', label: 'Wallet', icon: '💼' },
     ];
 
