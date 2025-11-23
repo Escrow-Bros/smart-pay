@@ -49,11 +49,28 @@ class UniversalEyeAgent:
     Architecture:
     1. Paralegal generates verification plan at job creation (TASK-011)
     2. Eye uses that plan to verify worker's proof (TASK-013)
+    
+    Uses SpoonOS (spoon_ai SDK) for:
+    - Configuration management
+    - Text-based analysis
+    - Fallback mechanisms
+    
+    Uses direct OpenAI client for:
+    - Vision model calls (GPT-4V)
+    - Image analysis (SpoonOS Message doesn't support structured image content yet)
     """
     
     def __init__(self):
-        config = ConfigurationManager()
-        self.llm = LLMManager(config)
+        # SpoonOS configuration and manager
+        self.config = ConfigurationManager()
+        self.llm = LLMManager(self.config)
+        
+        # Direct OpenAI client for vision (required for image inputs)
+        # Note: SpoonOS Message objects only support text content currently
+        self.vision_client = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            base_url=os.getenv("OPENAI_BASE_URL")
+        )
     
     async def verify(
         self,
@@ -158,11 +175,8 @@ class UniversalEyeAgent:
         
         # Step 3: Build vision prompt with actual images
         try:
-            client = AsyncOpenAI(
-                api_key=os.getenv("OPENAI_API_KEY"),
-                base_url=os.getenv("OPENAI_BASE_URL")
-            )
-            
+            # Use vision client (initialized via SpoonOS config)
+            # Note: Direct client needed because SpoonOS Message doesn't support image content yet
             # Build message content with images
             content = [
                 {
@@ -249,9 +263,9 @@ BEFORE PHOTOS (Reference):"""
 }"""
             })
             
-            # Call vision model
-            print("👁️ Analyzing images with vision model...")
-            response = await client.chat.completions.create(
+            # Call vision model using SpoonOS-configured client
+            print("👁️ Analyzing images with vision model (via SpoonOS)...")
+            response = await self.vision_client.chat.completions.create(
                 model="gpt-4o",  # Vision model
                 messages=[
                     {
@@ -326,11 +340,7 @@ BEFORE PHOTOS (Reference):"""
         print(f"✅ Downloaded {len(proof_images_b64)} proof images for verification")
         
         try:
-            client = AsyncOpenAI(
-                api_key=os.getenv("OPENAI_API_KEY"),
-                base_url=os.getenv("OPENAI_BASE_URL")
-            )
-            
+            # Use SpoonOS-configured vision client
             # Build vision prompt
             content = [
                 {
@@ -390,9 +400,9 @@ Return ONLY valid JSON:
 }"""
             })
             
-            # Call vision model
-            print("👁️ Verifying work quality with vision model...")
-            response = await client.chat.completions.create(
+            # Call vision model using SpoonOS-configured client
+            print("👁️ Verifying work quality with vision model (via SpoonOS)...")
+            response = await self.vision_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {

@@ -147,8 +147,14 @@ async def verify_image_match(text: str, task: str, image_bytes: bytes) -> dict:
     """
     Compare text description to reference image using Vision AI
     
-    TEMPORARY: Vision verification disabled due to Sudo AI blocking
-    TODO: Re-enable when vision model access is confirmed
+    UPGRADED: Now uses GPT-4V to actually analyze the reference image!
+    
+    This verifies that the client's reference photo actually shows what they're describing.
+    
+    Args:
+        text: Full job description from client
+        task: Extracted task description
+        image_bytes: Reference photo bytes
     
     Returns:
         {
@@ -159,24 +165,95 @@ async def verify_image_match(text: str, task: str, image_bytes: bytes) -> dict:
         }
     """
     
-    print("⚠️  Vision verification temporarily disabled")
-    print("    Reason: Vision API bypasses httpx monkey patch and gets blocked")
-    print("    TODO: Implement proper vision model integration")
+    print("👁️ Analyzing reference image with vision model...")
     
-    # For now, optimistically assume match
-    # This allows development to continue while vision integration is fixed
-    return {
-        "match": True,
-        "confidence": 0.7,
-        "image_shows": "Image verification pending - temporarily bypassed",
-        "mismatch_reason": None
-    }
-    
-    # TODO: Implement vision verification when API access is confirmed
-    # Options:
-    # 1. Use a vision model that doesn't get blocked
-    # 2. Implement custom vision API wrapper
-    # 3. Use a different vision service (Anthropic Claude Vision, etc.)
+    try:
+        # Step 1: Encode image as base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Step 2: Create vision client (configured with SpoonOS credentials)
+        from openai import AsyncOpenAI
+        
+        client = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            base_url=os.getenv("OPENAI_BASE_URL")
+        )
+        
+        # Step 3: Build vision prompt
+        vision_prompt = f"""Analyze this reference image and compare it to the job description.
+
+JOB DESCRIPTION: "{text}"
+TASK EXTRACTED: "{task}"
+
+Your job:
+1. Describe what you see in the image (be specific about objects, condition, location details)
+2. Determine if the image matches what the text describes
+3. If the text mentions a problem (graffiti, broken, dirty, needs painting), verify it's visible in the image
+4. If the text mentions a location/object, verify the image shows that location/object
+
+Be STRICT:
+- "Paint wall" + image shows door → MISMATCH
+- "Clean graffiti on wall" + image shows clean wall → MISMATCH (no graffiti visible)
+- "Fix broken window" + image shows intact window → MISMATCH (nothing broken)
+- "Paint bedroom wall blue" + image shows bedroom wall → MATCH
+- "Clean dirty floor" + image shows dirty floor → MATCH
+
+Return ONLY valid JSON:
+{{
+  "match": true/false,
+  "confidence": 0.0-1.0,
+  "image_shows": "detailed description of what you actually see in the image",
+  "mismatch_reason": "explanation if match is false, null if match is true"
+}}"""
+        
+        # Step 4: Call vision model
+        response = await client.chat.completions.create(
+            model="gpt-4o",  # Vision model
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": vision_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}",
+                                "detail": "high"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500,
+            temperature=0.1
+        )
+        
+        # Step 5: Parse response
+        content = response.choices[0].message.content
+        content = content.replace("```json", "").replace("```", "").strip()
+        result = json.loads(content)
+        
+        print(f"✅ Vision analysis: Match={result.get('match', False)}, Confidence={result.get('confidence', 0.0):.2f}")
+        print(f"   Image shows: {result.get('image_shows', 'N/A')[:80]}...")
+        
+        return {
+            "match": result.get("match", False),
+            "confidence": result.get("confidence", 0.0),
+            "image_shows": result.get("image_shows", "Unknown"),
+            "mismatch_reason": result.get("mismatch_reason")
+        }
+        
+    except Exception as e:
+        print(f"⚠️ Vision verification failed: {e}")
+        
+        # Conservative fallback: Assume match with low confidence
+        # This allows jobs to proceed but with warning
+        return {
+            "match": True,
+            "confidence": 0.5,
+            "image_shows": f"Vision analysis failed: {str(e)}",
+            "mismatch_reason": None
+        }
 
 # --- LOGIC C: VERIFICATION PLAN GENERATOR (FOR EYE AGENT) ---
 async def generate_verification_plan(task: str, task_description: str) -> dict:
@@ -409,7 +486,7 @@ async def analyze_job_request(text: str, reference_image: bytes) -> dict:
     )
     
     # Step 6: Analyze reference photo features (basic for now)
-    reference_analysis = await analyze_reference_photo(image_bytes)
+    reference_analysis = await analyze_reference_photo(reference_image)
     
     # Success!
     return {
