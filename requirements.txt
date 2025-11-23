@@ -13,7 +13,7 @@ aiohappyeyeballs==2.6.1
 aiosignal==1.4.0
 aiodns==3.5.0
 httpx>=0.27.0
-requests==2.31.0
+requests>=2.31.0
 urllib3==2.5.0
 certifi==2025.11.12
 charset-normalizer==3.4.4
