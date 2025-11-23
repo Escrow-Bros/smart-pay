@@ -1,0 +1,75 @@
+services:
+  - type: web
+    name: gigshield-backend
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -c 'from backend.database import init_db; init_db()' && uvicorn backend.api:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      # Python Runtime
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      
+      # Neo N3 Testnet Configuration
+      - key: NEO_TESTNET_RPC
+        value: https://testnet1.neo.coz.io:443
+      
+      # Neo Wallet Keys - DEPLOYER
+      - key: DEPLOYER_WIF
+        sync: false  # Add manually in Render dashboard
+      - key: DEPLOYER_ADDR
+        value: NddzCAoj13xgtBvFZ1Wp8eRdETsjpNTbyz
+      
+      # Neo Wallet Keys - AGENT (Eye Agent)
+      - key: AGENT_WIF
+        sync: false  # Add manually in Render dashboard
+      - key: AGENT_ADDR
+        value: NRF64mpLJ8yExn38EjwkxzPGoJ5PLyUbtP
+      
+      # Neo Wallet Keys - CLIENT
+      - key: CLIENT_WIF
+        sync: false  # Add manually in Render dashboard
+      - key: CLIENT_ADDR
+        value: NYKdk2LUEngRZNc5hnFvuFJV6n2hpppSVg
+      
+      # Neo Wallet Keys - WORKER
+      - key: WORKER_WIF
+        sync: false  # Add manually in Render dashboard
+      - key: WORKER_ADDR
+        value: Nij8VV5N7ehpYvHWYRgE4KUWeCoCt5xzXL
+      
+      # Neo Wallet Keys - TREASURY
+      - key: TREASURY_WIF
+        sync: false  # Add manually in Render dashboard
+      - key: TREASURY_ADDR
+        value: NXpN8dzPnXaVYqRTiS6dXPXG8NmaqoeqjY
+      
+      # Smart Contract
+      - key: VAULT_CONTRACT_HASH
+        value: 0x2c9090b5eb4639a6c27b0bfeaba4d7680ef89775
+      
+      # AI Configuration (SpoonAI with custom base URL)
+      - key: OPENAI_API_KEY
+        sync: false  # Add manually in Render dashboard
+      - key: OPENAI_BASE_URL
+        value: https://sudoapp.dev/api/v1
+      
+      # Google Maps API
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false  # Add manually in Render dashboard
+      
+      # 4Everland IPFS Storage
+      - key: EVERLAND_BUCKET_NAME
+        value: super-pay
+      - key: EVERLAND_ACCESS_KEY
+        sync: false  # Add manually in Render dashboard
+      - key: EVERLAND_SECRET_KEY
+        sync: false  # Add manually in Render dashboard
+      - key: EVERLAND_ENDPOINT
+        value: https://endpoint.4everland.co/
+    
+    healthCheckPath: /health
+    
+    autoDeploy: true
