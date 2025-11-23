@@ -341,7 +341,7 @@ GigShield: AI call once at job creation
 
 ```python
 from agent.paralegal import analyze_job_request
-from agent.storage import upload_to_ipfs
+from services.storage import upload_to_ipfs
 
 # Client uploads reference photo
 reference_bytes = get_camera_input()
@@ -368,7 +368,7 @@ if result["status"] == "complete":
 ### Example 2: Submit Proof (Frontend)
 
 ```python
-from agent.storage import upload_to_ipfs
+from services.storage import upload_to_ipfs
 from agent.eye import verify_work
 
 # Worker uploads proof

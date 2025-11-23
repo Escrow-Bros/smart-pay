@@ -1,13 +1,19 @@
 """
-4Everland IPFS Storage Module
+4Everland IPFS Storage Service
 Handles uploading images and files to IPFS via 4Everland
+
+This is an infrastructure service, not an AI agent.
 """
 import os
 import requests
 from typing import Optional
 from dotenv import load_dotenv
 
-load_dotenv("agent/.env")
+# Load from project root .env
+load_dotenv(".env")
+# Fallback to agent/.env for backward compatibility
+if not os.getenv("EVERLAND_BUCKET_NAME"):
+    load_dotenv("agent/.env")
 
 def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg") -> Optional[str]:
     """
