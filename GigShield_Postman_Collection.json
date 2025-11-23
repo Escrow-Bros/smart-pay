@@ -1,0 +1,116 @@
+{
+  "info": {
+    "name": "GigShield API - Agent Testing",
+    "description": "Test Paralegal and Eye agents via REST API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Create Job (Paralegal)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "description",
+              "value": "Paint my bedroom wall blue at 123 Main Street for 50 GAS",
+              "type": "text",
+              "description": "Job description"
+            },
+            {
+              "key": "reference_image",
+              "type": "file",
+              "src": [],
+              "description": "Upload a JPG/PNG image"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/jobs/create",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "jobs", "create"]
+        },
+        "description": "Test Paralegal agent - validates job and generates verification plan"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get Job Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/jobs/job_001",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "jobs", "job_001"]
+        },
+        "description": "Get details of created job (use job_id from create response)"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Verify Work (Eye)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"job_id\": \"job_001\",\n  \"proof_photos\": [\"ipfs://test/proof_painted_blue.jpg\"],\n  \"worker_id\": \"0xWorker123...\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/jobs/verify",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "jobs", "verify"]
+        },
+        "description": "Test Eye agent - verifies worker proof photos"
+      },
+      "response": []
+    },
+    {
+      "name": "4. List All Jobs",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/jobs",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "jobs"]
+        },
+        "description": "List all jobs in the system"
+      },
+      "response": []
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "health"]
+        },
+        "description": "Check API health status"
+      },
+      "response": []
+    }
+  ]
+}
+

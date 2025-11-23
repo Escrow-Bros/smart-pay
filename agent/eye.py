@@ -11,6 +11,7 @@ import requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
+from gps_verifier import verify_gps_location
 
 # Monkey-patch httpx to avoid Sudo AI blocking OpenAI SDK headers
 import httpx
@@ -76,7 +77,8 @@ class UniversalEyeAgent:
         self,
         proof_photos: List[str],
         job_id: str,
-        worker_id: Optional[str] = None
+        worker_id: Optional[str] = None,
+        worker_location: Optional[Dict] = None
     ) -> Dict:
         """
         Main entry point - verifies ANY type of gig work
@@ -85,6 +87,8 @@ class UniversalEyeAgent:
             proof_photos: IPFS URLs of worker's proof (AFTER photos)
             job_id: Job identifier to fetch requirements from contract
             worker_id: Optional worker address for reputation checks
+            worker_location: Optional worker GPS location from browser/app permissions
+                            {"latitude": float, "longitude": float, "accuracy": float}
         
         Returns:
             Verification result with verdict and reasoning
@@ -103,10 +107,13 @@ class UniversalEyeAgent:
         
         # Step 1: Compare before vs after
         print("🔍 Step 1: Comparing before/after photos...")
+        job_location = job_data.get("location")  # Get job location from job_data
         comparison = await self.compare_before_after(
             reference_photos,
             proof_photos,
-            verification_plan
+            verification_plan,
+            job_location,  # Job location for comparison
+            worker_location  # Worker location from browser/app permissions
         )
         
         # Step 2: Verify against requirements
@@ -134,7 +141,9 @@ class UniversalEyeAgent:
         self,
         reference_photos: List[str],
         proof_photos: List[str],
-        verification_plan: Dict
+        verification_plan: Dict,
+        job_location: Optional[Dict] = None,
+        worker_location: Optional[Dict] = None
     ) -> Dict:
         """
         Compare BEFORE (reference) vs AFTER (proof) photos
@@ -145,6 +154,14 @@ class UniversalEyeAgent:
         - Are they the same location?
         - Did transformation happen?
         - Is coverage consistent?
+        - GPS location verification (if locations provided)
+        
+        Args:
+            reference_photos: List of reference photo URLs
+            proof_photos: List of proof photo URLs
+            verification_plan: Verification plan from job_data
+            job_location: Optional job GPS location from job_data {"latitude": float, "longitude": float, "accuracy": float}
+            worker_location: Optional worker GPS location from browser/app permissions {"latitude": float, "longitude": float, "accuracy": float}
         """
         
         print("📥 Downloading images for visual comparison...")
@@ -172,6 +189,35 @@ class UniversalEyeAgent:
             )
         
         print(f"✅ Downloaded {len(reference_images_b64)} reference + {len(proof_images_b64)} proof images")
+        
+        # Step 2.5: GPS Location Verification (if both locations provided)
+        gps_verification = None
+        if job_location and worker_location:
+            print("📍 Verifying GPS location...")
+            try:
+                # Verify worker location against job location
+                gps_verification = verify_gps_location(
+                    reference_gps=job_location,
+                    proof_gps=worker_location,
+                    max_distance_meters=50.0
+                )
+                print(f"📍 GPS Verification: {gps_verification['reasoning']}")
+            except Exception as e:
+                print(f"⚠️ GPS verification error: {e}")
+                gps_verification = {
+                    "location_match": False,
+                    "distance_meters": None,
+                    "confidence": 0.0,
+                    "reasoning": f"GPS verification failed: {str(e)}"
+                }
+        elif job_location and not worker_location:
+            print("⚠️ Job has location requirement but worker location not provided")
+            gps_verification = {
+                "location_match": False,
+                "distance_meters": None,
+                "confidence": 0.0,
+                "reasoning": "Worker location not provided (required for this job)"
+            }
         
         # Step 3: Build vision prompt with actual images
         try:
@@ -280,7 +326,13 @@ BEFORE PHOTOS (Reference):"""
             # Parse JSON response
             comparison = self._parse_json_response(response.choices[0].message.content)
             
+            # Add GPS verification result to comparison
+            if gps_verification:
+                comparison['gps_verification'] = gps_verification
+            
             print(f"✅ Vision analysis complete - Location match: {comparison.get('same_location', {}).get('verdict', 'unknown')}")
+            if gps_verification:
+                print(f"📍 GPS match: {gps_verification.get('location_match', 'N/A')} (distance: {gps_verification.get('distance_meters', 'N/A')}m)")
             
             return comparison
             
@@ -442,6 +494,19 @@ Return ONLY valid JSON:
         Multi-layer checks ensure fraud prevention
         """
         
+        # Check 0: GPS Location must match (if provided)
+        if 'gps_verification' in comparison:
+            gps_check = comparison['gps_verification']
+            if not gps_check.get('location_match', False):
+                return {
+                    "verified": False,
+                    "confidence": 0.0,
+                    "reason": f"GPS location verification failed. {gps_check.get('reasoning', 'Location does not match job location.')}",
+                    "category": "GPS_MISMATCH",
+                    "issues": gps_check.get('reasoning', 'GPS coordinates do not match'),
+                    "gps_data": gps_check
+                }
+        
         # Check 1: Location must match
         if not comparison['same_location']['verdict']:
             return {
@@ -529,6 +594,11 @@ Return ONLY valid JSON:
             "reference_photos": [
                 "ipfs://placeholder/before_wall.jpg"
             ],
+            "location": {
+                "latitude": 37.7749,
+                "longitude": -122.4194,
+                "accuracy": 10.0
+            },
             "verification_plan": {
                 "task_category": "painting",
                 "expected_transformation": {
@@ -744,7 +814,8 @@ Make conservative assessment (you cannot see images). Return JSON."""
 async def verify_work(
     proof_photos: List[str],
     job_id: str,
-    worker_id: Optional[str] = None
+    worker_id: Optional[str] = None,
+    worker_location: Optional[Dict] = None
 ) -> Dict:
     """
     Simplified interface for frontend use
@@ -753,6 +824,8 @@ async def verify_work(
         proof_photos: List of IPFS URLs of worker's proof photos
         job_id: Job identifier from smart contract
         worker_id: Optional worker address
+        worker_location: Optional worker GPS location from browser/app permissions
+                        {"latitude": float, "longitude": float, "accuracy": float}
     
     Returns:
         Verification result:
@@ -767,7 +840,8 @@ async def verify_work(
     Example:
         result = await verify_work(
             proof_photos=["ipfs://Qm.../after_wall.jpg"],
-            job_id="job_12345"
+            job_id="job_12345",
+            worker_location={"latitude": 37.7749, "longitude": -122.4194, "accuracy": 10.0}
         )
         
         if result["verified"]:
@@ -777,7 +851,7 @@ async def verify_work(
             print(f"❌ REJECTED: {result['reason']}")
     """
     agent = UniversalEyeAgent()
-    return await agent.verify(proof_photos, job_id, worker_id)
+    return await agent.verify(proof_photos, job_id, worker_id, worker_location)
 
 
 # ============================================================================
@@ -787,11 +861,18 @@ async def verify_work(
 def verify_work_sync(
     proof_photos: List[str],
     job_id: str,
-    worker_id: Optional[str] = None
+    worker_id: Optional[str] = None,
+    worker_location: Optional[Dict] = None
 ) -> Dict:
     """
     Synchronous wrapper for verify_work
     Use when calling from non-async code
+    
+    Args:
+        proof_photos: List of IPFS URLs of worker's proof photos
+        job_id: Job identifier from smart contract
+        worker_id: Optional worker address
+        worker_location: Optional worker GPS location from browser/app permissions
     """
-    return asyncio.run(verify_work(proof_photos, job_id, worker_id))
+    return asyncio.run(verify_work(proof_photos, job_id, worker_id, worker_location))
 
