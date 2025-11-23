@@ -4,6 +4,22 @@
     "abi": {
         "methods": [
             {
+                "name": "_deploy",
+                "offset": 1482,
+                "parameters": [
+                    {
+                        "type": "Any",
+                        "name": "data"
+                    },
+                    {
+                        "type": "Boolean",
+                        "name": "update"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Void"
+            },
+            {
                 "name": "create_job",
                 "offset": 12,
                 "parameters": [
@@ -25,7 +41,7 @@
             },
             {
                 "name": "get_job_client",
-                "offset": 234,
+                "offset": 202,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -37,19 +53,7 @@
             },
             {
                 "name": "get_job_required",
-                "offset": 293,
-                "parameters": [
-                    {
-                        "type": "Integer",
-                        "name": "job_id"
-                    }
-                ],
-                "safe": false,
-                "returntype": "Integer"
-            },
-            {
-                "name": "get_job_deposited",
-                "offset": 337,
+                "offset": 261,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -61,7 +65,7 @@
             },
             {
                 "name": "get_job_status",
-                "offset": 382,
+                "offset": 305,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -70,6 +74,122 @@
                 ],
                 "safe": false,
                 "returntype": "Integer"
+            },
+            {
+                "name": "get_job_worker",
+                "offset": 347,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_agent_addr",
+                "offset": 406,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_treasury_addr",
+                "offset": 456,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_fee_bps",
+                "offset": 509,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Integer"
+            },
+            {
+                "name": "get_owner",
+                "offset": 539,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "set_owner",
+                "offset": 584,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "new_owner"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "set_agent",
+                "offset": 669,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "agent"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "set_treasury",
+                "offset": 753,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "treasury"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "set_fee_bps",
+                "offset": 840,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "bps"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "assign_worker",
+                "offset": 934,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    },
+                    {
+                        "type": "Hash160",
+                        "name": "worker"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "release_funds",
+                "offset": 1079,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
             }
         ],
         "events": [
@@ -91,19 +211,40 @@
                 ]
             },
             {
-                "name": "Deposit",
+                "name": "WorkerAssigned",
                 "parameters": [
                     {
                         "name": "job_id",
                         "type": "Integer"
                     },
                     {
-                        "name": "from_address",
+                        "name": "worker",
+                        "type": "Hash160"
+                    }
+                ]
+            },
+            {
+                "name": "FundsReleased",
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "worker",
                         "type": "Hash160"
                     },
                     {
-                        "name": "amount",
+                        "name": "worker_amount",
                         "type": "Integer"
+                    },
+                    {
+                        "name": "fee_amount",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "treasury",
+                        "type": "Hash160"
                     }
                 ]
             }

@@ -1,3 +1,4 @@
+from typing import Any
 from boa3.sc.compiletime import public
 from boa3.sc.types import UInt160
 from boa3.sc.runtime import calling_script_hash, check_witness, executing_script_hash
@@ -27,18 +28,42 @@ on_job_created = CreateNewEvent(
     'JobCreated'
 )
 
-on_deposit = CreateNewEvent(
+on_worker_assigned = CreateNewEvent(
     [
         ('job_id', int),
-        ('from_address', UInt160),
-        ('amount', int)
+        ('worker', UInt160)
     ],
-    'Deposit'
+    'WorkerAssigned'
+)
+
+on_funds_released = CreateNewEvent(
+    [
+        ('job_id', int),
+        ('worker', UInt160),
+        ('worker_amount', int),
+        ('fee_amount', int),
+        ('treasury', UInt160)
+    ],
+    'FundsReleased'
 )
 
 def _key(field: bytes, job_id: int) -> bytes:
     """Generate storage key for job data"""
     return field + StdLib.serialize(job_id)
+
+@public
+def _deploy(data: Any, update: bool):
+    """
+    Initialize contract storage on deployment.
+    Sets the deployer as owner and initializes default values.
+    
+    :param data: Can contain initialization data [agent_addr, treasury_addr, fee_bps]
+    :param update: True if contract is being updated
+    """
+    if not update:
+        # Initialize default fee: 5% (500 basis points)
+        put_int(b'fee_bps', 500)
+        # Owner must be set via set_owner after deployment
 
 @public
 def create_job(job_id: int, client: UInt160, amount: int) -> bool:
@@ -71,36 +96,12 @@ def create_job(job_id: int, client: UInt160, amount: int) -> bool:
     # Store job data
     put_uint160(_key(b"job_client", job_id), client)
     put_int(_key(b"job_required", job_id), amount)
-    put_int(_key(b"job_deposited", job_id), amount)
     put_int(_key(b"job_status", job_id), STATUS_OPEN)
     
     # Emit event
     on_job_created(job_id, client, amount)
     
     return True
-
-def onNEP17Payment(from_addr: UInt160, amount: int, data: int):
-    """
-    Fallback to handle direct GAS transfers (for topping up existing jobs).
-    This allows clients to add more funds to a job if needed.
-    """
-    # Only accept GAS token
-    if calling_script_hash != GasToken.hash:
-        return
-    
-    job_id = data
-    
-    # Check if job exists and is still open
-    status = get_int(_key(b"job_status", job_id))
-    if status == STATUS_NONE:
-        return
-    
-    # Update deposited amount
-    deposited = get_int(_key(b"job_deposited", job_id))
-    put_int(_key(b"job_deposited", job_id), deposited + amount)
-    
-    # Emit event
-    on_deposit(job_id, from_addr, amount)
 
 @public
 def get_job_client(job_id: int) -> UInt160:
@@ -111,9 +112,177 @@ def get_job_required(job_id: int) -> int:
     return get_int(_key(b"job_required", job_id))
 
 @public
-def get_job_deposited(job_id: int) -> int:
-    return get_int(_key(b"job_deposited", job_id))
-
-@public
 def get_job_status(job_id: int) -> int:
     return get_int(_key(b"job_status", job_id))
+
+@public
+def get_job_worker(job_id: int) -> UInt160:
+    """Get the worker assigned to a job"""
+    return get_uint160(_key(b"job_worker", job_id))
+
+@public
+def get_agent_addr() -> UInt160:
+    """Get the current agent (AI Tribunal) address"""
+    return get_uint160(b'agent_addr')
+
+@public
+def get_treasury_addr() -> UInt160:
+    """Get the current treasury address"""
+    return get_uint160(b'treasury_addr')
+
+@public
+def get_fee_bps() -> int:
+    """Get the current fee in basis points (e.g., 500 = 5%)"""
+    return get_int(b'fee_bps')
+
+@public
+def get_owner() -> UInt160:
+    """Get the contract owner address"""
+    return get_uint160(b'owner')
+
+@public
+def set_owner(new_owner: UInt160) -> bool:
+    """
+    Set the contract owner. Can only be called by current owner.
+    Used for initial setup since we can't easily get deployer address in _deploy.
+    
+    :param new_owner: Address of the new owner
+    :return: True if successful
+    """
+    current_owner = get_uint160(b'owner')
+    
+    # If no owner set yet (first time), allow anyone to claim
+    # Otherwise, require current owner's witness
+    if len(current_owner) > 0:
+        if not check_witness(current_owner):
+            return False
+    
+    put_uint160(b'owner', new_owner)
+    return True
+
+@public
+def set_agent(agent: UInt160) -> bool:
+    """
+    Set the agent (AI Tribunal Banker) address.
+    Only callable by contract owner.
+    
+    :param agent: Address of the agent wallet
+    :return: True if successful
+    """
+    owner = get_uint160(b'owner')
+    if not check_witness(owner):
+        return False
+    
+    put_uint160(b'agent_addr', agent)
+    return True
+
+@public
+def set_treasury(treasury: UInt160) -> bool:
+    """
+    Set the treasury address for fee collection.
+    Only callable by contract owner.
+    
+    :param treasury: Address of the treasury wallet
+    :return: True if successful
+    """
+    owner = get_uint160(b'owner')
+    if not check_witness(owner):
+        return False
+    
+    put_uint160(b'treasury_addr', treasury)
+    return True
+
+@public
+def set_fee_bps(bps: int) -> bool:
+    """
+    Set the fee in basis points (100 bps = 1%).
+    Only callable by contract owner.
+    
+    :param bps: Fee in basis points (e.g., 500 = 5%)
+    :return: True if successful
+    """
+    owner = get_uint160(b'owner')
+    if not check_witness(owner):
+        return False
+    
+    # Validate reasonable fee range (0-20%)
+    if bps < 0 or bps > 2000:
+        return False
+    
+    put_int(b'fee_bps', bps)
+    return True
+
+@public
+def assign_worker(job_id: int, worker: UInt160) -> bool:
+    """
+    Assign a worker to a job (first-come-first-served).
+    Worker must sign the transaction to claim the job.
+    
+    :param job_id: The job to assign
+    :param worker: Address of the worker claiming the job
+    :return: True if successful
+    """
+    # Check job status - must be OPEN
+    status = get_int(_key(b"job_status", job_id))
+    if status != STATUS_OPEN:
+        return False
+    
+    # Verify the worker is signing this transaction
+    if not check_witness(worker):
+        return False
+    
+    # Assign worker and lock job
+    put_uint160(_key(b"job_worker", job_id), worker)
+    put_int(_key(b"job_status", job_id), STATUS_LOCKED)
+    
+    # Emit event
+    on_worker_assigned(job_id, worker)
+    
+    return True
+
+@public
+def release_funds(job_id: int) -> bool:
+    """
+    Release funds to worker and treasury after AI Tribunal verification.
+    Only callable by the agent (AI Tribunal Banker).
+    
+    :param job_id: The job to settle
+    :return: True if successful
+    """
+    # Verify agent signature
+    agent = get_uint160(b'agent_addr')
+    if not check_witness(agent):
+        return False
+    
+    # Check job status - must be LOCKED
+    status = get_int(_key(b"job_status", job_id))
+    if status != STATUS_LOCKED:
+        return False
+    
+    # Get job details
+    worker = get_uint160(_key(b"job_worker", job_id))
+    amount = get_int(_key(b"job_required", job_id))
+    treasury = get_uint160(b'treasury_addr')
+    fee_bps = get_int(b'fee_bps')
+    
+    # Calculate fee and worker payment
+    fee_amount = amount * fee_bps // 10000
+    worker_amount = amount - fee_amount
+    
+    # Transfer to worker
+    success_worker = GasToken.transfer(executing_script_hash, worker, worker_amount, None)
+    if not success_worker:
+        return False
+    
+    # Transfer fee to treasury
+    success_treasury = GasToken.transfer(executing_script_hash, treasury, fee_amount, None)
+    if not success_treasury:
+        return False
+    
+    # Mark job as completed
+    put_int(_key(b"job_status", job_id), STATUS_COMPLETED)
+    
+    # Emit event
+    on_funds_released(job_id, worker, worker_amount, fee_amount, treasury)
+    
+    return True
