@@ -3,6 +3,10 @@
 
 echo "🚀 Starting GigShield Backend API..."
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # Check if virtual environment exists
 if [ ! -d ".venv" ]; then
     echo "❌ Virtual environment not found. Creating..."
@@ -14,14 +18,23 @@ source .venv/bin/activate
 
 # Check if key dependencies are installed
 echo "📦 Checking dependencies..."
-if ! python -c "from backend.api import app" 2>/dev/null; then
+if ! python -c "import httpx; import spoon_ai; from boa3.boa3 import Boa3" 2>/dev/null; then
     echo "   Installing missing dependencies..."
-    pip install -q -r requirements.txt || {
+    # Install neo3-boa and its dependencies first (requires requests==2.31.0)
+    pip install -q requests==2.31.0 neo3-boa==1.4.1 2>/dev/null
+    # Install spoon-ai-sdk without checking dependencies (it wants requests>=2.32.3 but works with 2.31.0)
+    pip install -q --no-deps spoon-ai-sdk==0.3.3 2>/dev/null
+    # Install remaining dependencies
+    pip install -q -r requirements.txt 2>/dev/null || true
+    
+    # Verify critical imports work
+    if python -c "import httpx; import spoon_ai; from boa3.boa3 import Boa3" 2>/dev/null; then
+        echo "   ✓ All dependencies installed (some version warnings are normal)"
+    else
         echo "❌ Failed to install dependencies"
-        echo "   Note: Some version warnings are acceptable if imports work"
-        echo "   Try running: source .venv/bin/activate && cd backend && python api.py"
+        echo "   Try manually: source .venv/bin/activate && pip install -r requirements.txt"
         exit 1
-    }
+    fi
 else
     echo "   ✓ All dependencies ready"
 fi
@@ -32,10 +45,15 @@ if [ ! -f ".env" ]; then
     echo "   Copy .env.example to .env and configure your settings"
 fi
 
-# Start API server
-echo "✅ Starting API server on http://localhost:8000"
-echo "   Documentation: http://localhost:8000/docs"
+# Start backend server
+cd backend
+
+echo "✅ Starting backend server..."
+echo "   API: http://localhost:8000"
+echo "   Docs: http://localhost:8000/docs"
+echo ""
+echo "   Press Ctrl+C to stop the server"
 echo ""
 
-cd backend
+# Run directly (will block until Ctrl+C)
 python api.py

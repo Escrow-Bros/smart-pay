@@ -10,12 +10,14 @@ from pydantic import BaseModel
 from typing import Optional, List
 import asyncio
 import json
+import os
 
 # Internal imports
 from backend.database import get_db
-from agent.paralegal import analyze_job_request
-from agent.eye import verify_work
-from agent.storage import upload_to_ipfs
+from backend.agent.paralegal import analyze_job_request
+from backend.agent.eye import UniversalEyeAgent, verify_work
+from backend.agent.storage import upload_to_ipfs
+from backend.agent.banker import check_balance
 from src.neo_mcp import NeoMCP
 from scripts.check_balances import get_gas_balance
 
@@ -25,6 +27,9 @@ from scripts.check_balances import get_gas_balance
 class CreateJobRequest(BaseModel):
     client_address: str
     description: str
+    location: str = ""
+    latitude: float = 0.0
+    longitude: float = 0.0
     reference_photos: List[str]  # IPFS URLs
     amount: float
 
@@ -36,13 +41,35 @@ class SubmitProofRequest(BaseModel):
     job_id: int
     proof_photos: List[str]  # IPFS URLs
 
+class ValidationResult(BaseModel):
+    clarity_issues: List[str]
+    image_mismatch: bool
+    mismatch_details: Optional[str]
+    image_shows: Optional[str] = None
+
+class BalanceCheck(BaseModel):
+    sufficient: bool
+    balance: float
+    required: float
+    error: Optional[str] = None
+
+class JobAnalysisResponse(BaseModel):
+    success: bool
+    status: str
+    data: dict
+    validation: ValidationResult
+    task_description: List[str]
+    clarifying_questions: List[str]
+    message: str
+    balance_check: Optional[BalanceCheck] = None
+
 
 # ==================== APP SETUP ====================
 
 app = FastAPI(
-    title="GigShield Backend API",
+    title="GigShield Unified Backend API",
     description="Complete backend for GigShield - Database + Blockchain + AI",
-    version="3.0.0"
+    version="4.0.0"
 )
 
 # Enable CORS for Reflex frontend
@@ -57,18 +84,68 @@ app.add_middleware(
 # Initialize services
 db = get_db()
 mcp = NeoMCP()
+eye_agent = UniversalEyeAgent()
+
+
+# ==================== HEALTH CHECK ====================
+
+@app.get("/")
+async def root():
+    """API health check"""
+    return {
+        "status": "online",
+        "service": "GigShield Unified Backend API",
+        "version": "4.0.0",
+        "components": {
+            "database": "SQLite",
+            "blockchain": "Neo N3",
+            "ai_agents": ["Paralegal", "Eye", "Banker"]
+        },
+        "endpoints": {
+            "GET /api/health": "Detailed health check",
+            "GET /api/wallet/balance/{address}": "Get wallet balance",
+            "GET /api/jobs/available": "List available jobs",
+            "GET /api/jobs/client/{address}": "Get client's jobs",
+            "GET /api/jobs/worker/{address}": "Get worker's jobs",
+            "GET /api/jobs/{job_id}": "Get job details",
+            "POST /api/jobs/analyze": "Analyze job with AI (Paralegal)",
+            "POST /api/jobs/create": "Create new job",
+            "POST /api/jobs/assign": "Assign job to worker",
+            "POST /api/upload/proof": "Upload proof image to IPFS",
+            "POST /api/jobs/submit": "Submit proof and verify",
+            "POST /api/eye/verify-work": "Direct Eye verification endpoint"
+        }
+    }
+
+
+@app.get("/api/health")
+async def health_check():
+    """Detailed health check"""
+    try:
+        # Check DB
+        db_ok = db.get_available_jobs() is not None
+        
+        return {
+            "status": "healthy",
+            "database": "ok" if db_ok else "error",
+            "blockchain": "neo-testnet",
+            "ai_service": "sudo-ai",
+            "text_model": "gpt-4",
+            "vision_model": "gpt-4o"
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "error": str(e)
+        }
 
 
 # ==================== WALLET ENDPOINTS ====================
 
 @app.get("/api/wallet/balance/{address}")
 async def get_wallet_balance(address: str):
-    """
-    Get GAS balance for Neo N3 address
-    Uses check_balances.py logic
-    """
+    """Get GAS balance for Neo N3 address"""
     try:
-        import os
         rpc_url = os.getenv("NEO_TESTNET_RPC", "https://testnet1.neo.coz.io:443/")
         balance = get_gas_balance(rpc_url, address)
         
@@ -86,13 +163,15 @@ async def get_wallet_balance(address: str):
 
 @app.get("/api/jobs/available")
 async def list_available_jobs():
-    """Get all open jobs (fast query from DB)"""
+    """Get all open jobs (filtered for worker public view)"""
     try:
         jobs = db.get_available_jobs()
+        # Filter sensitive data for public worker view
+        filtered_jobs = [db._filter_for_worker_view(job) for job in jobs]
         return {
             "success": True,
-            "count": len(jobs),
-            "jobs": jobs
+            "count": len(filtered_jobs),
+            "jobs": filtered_jobs
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -100,13 +179,15 @@ async def list_available_jobs():
 
 @app.get("/api/jobs/client/{address}")
 async def get_client_jobs(address: str):
-    """Get all jobs created by a client"""
+    """Get all jobs created by a client (with full details for owner)"""
     try:
         jobs = db.get_client_jobs(address)
+        # Filter to show summary verification only
+        filtered_jobs = [db._filter_for_client_view(job) for job in jobs]
         return {
             "success": True,
-            "count": len(jobs),
-            "jobs": jobs
+            "count": len(filtered_jobs),
+            "jobs": filtered_jobs
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -149,6 +230,73 @@ async def get_job_details(job_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== AI ANALYSIS (Paralegal Agent) ====================
+
+@app.post("/api/jobs/analyze")
+async def analyze_job(
+    message: str = Form(...),
+    reference_image: UploadFile = File(...),
+    location: Optional[str] = Form(None),
+    client_address: Optional[str] = Form(None),
+    amount: Optional[float] = Form(None),
+):
+    """
+    Analyze job description + image using AI agents:
+    - Paralegal: Validates description, image match, and location
+    - Banker: Checks if client has sufficient balance
+    
+    Returns structured task breakdown, validation, and balance check
+    """
+    try:
+        image_bytes = await reference_image.read()
+
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Image too large. Maximum size is 10MB")
+
+        if not reference_image.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Invalid file type. Must be an image")
+
+        # 1. Paralegal analysis with location
+        result = await analyze_job_request(message, image_bytes, location=location)
+        
+        # 2. Balance check (if client address and amount provided)
+        balance_check = None
+        if client_address and amount:
+            balance_result = await check_balance(client_address, amount)
+            balance_check = BalanceCheck(**balance_result)
+
+        # Determine status and message
+        if result["status"] == "needs_clarification":
+            message_text = "Job description is unclear. Please provide more details."
+        elif result["status"] == "mismatch":
+            message_text = "Image doesn't match the description. Please check and resubmit."
+        else:
+            # Check balance issues
+            if balance_check and not balance_check.sufficient:
+                if balance_check.error:
+                    message_text = f"⚠️ Balance check failed: {balance_check.error}"
+                else:
+                    message_text = f"⚠️ Insufficient balance. You have {balance_check.balance:.2f} GAS but need {balance_check.required:.2f} GAS."
+            else:
+                message_text = "Job analyzed successfully! Ready to create contract."
+
+        return JobAnalysisResponse(
+            success=True,
+            status=result["status"],
+            data=result["data"],
+            validation=ValidationResult(**result["validation"]),
+            task_description=result["task_description"],
+            clarifying_questions=result["clarifying_questions"],
+            message=message_text,
+            balance_check=balance_check,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze job: {str(e)}")
+
+
 # ==================== JOB CREATION ====================
 
 @app.post("/api/jobs/create")
@@ -157,11 +305,18 @@ async def create_job(request: CreateJobRequest):
     Create new job: Database + Blockchain
     
     Flow:
-    1. Insert into DB (status: OPEN)
-    2. Create on blockchain
-    3. Update DB with tx_hash
+    1. Create on blockchain first
+    2. Insert into DB with tx_hash
     """
     try:
+        print("\n📝 CREATE JOB REQUEST:")
+        print(f"   Client: {request.client_address}")
+        print(f"   Description: {request.description[:100]}...")
+        print(f"   Location: {request.location}")
+        print(f"   Coordinates: ({request.latitude}, {request.longitude})")
+        print(f"   Amount: {request.amount} GAS")
+        print(f"   Reference Photos: {len(request.reference_photos)} images")
+        
         # Step 1: Create on blockchain first
         result = await mcp.create_job_on_chain(
             client_address=request.client_address,
@@ -176,6 +331,10 @@ async def create_job(request: CreateJobRequest):
         job_id = result["job_id"]
         tx_hash = result["tx_hash"]
         
+        print(f"\n✅ Blockchain job created:")
+        print(f"   Job ID: {job_id}")
+        print(f"   TX Hash: {tx_hash}")
+        
         # Step 2: Insert into database
         job = db.create_job(
             job_id=job_id,
@@ -183,8 +342,13 @@ async def create_job(request: CreateJobRequest):
             description=request.description,
             reference_photos=request.reference_photos,
             amount=request.amount,
-            tx_hash=tx_hash
+            tx_hash=tx_hash,
+            location=request.location,
+            latitude=request.latitude,
+            longitude=request.longitude
         )
+        
+        print(f"\n✅ Database job created successfully")
         
         return {
             "success": True,
@@ -196,6 +360,7 @@ async def create_job(request: CreateJobRequest):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"\n❌ Job creation error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Job creation failed: {str(e)}")
 
 
@@ -334,43 +499,102 @@ async def submit_proof(request: SubmitProofRequest):
         raise HTTPException(status_code=500, detail=f"Submission failed: {str(e)}")
 
 
-# ==================== HEALTH CHECK ====================
+# ==================== EYE VERIFICATION (Direct Endpoint) ====================
 
-@app.get("/")
-async def root():
-    """API health check"""
-    return {
-        "status": "online",
-        "service": "GigShield Backend API",
-        "version": "3.0.0",
-        "components": {
-            "database": "SQLite",
-            "blockchain": "Neo N3",
-            "ai_agents": ["Paralegal", "Eye"]
-        }
-    }
-
-
-@app.get("/api/health")
-async def health_check():
-    """Detailed health check"""
+@app.post("/api/eye/verify-work")
+async def verify_work_endpoint(
+    job_id: str = Form(...),
+    reference_image_url: str = Form(...),
+    proof_image: UploadFile = File(...),
+    task_description: str = Form(...),
+    job_location: str = Form(...),
+    worker_location: str = Form(...),
+    verification_plan: Optional[str] = Form(None),
+):
+    """
+    Direct Eye Agent verification endpoint
+    Verify worker's completed work using before/after photos + GPS
+    """
     try:
-        # Check DB
-        db_ok = db.get_available_jobs() is not None
+        # Parse locations
+        try:
+            job_loc = json.loads(job_location)
+            worker_loc = json.loads(worker_location)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid location format. Must be JSON with latitude/longitude")
+
+        if not all(k in job_loc for k in ["latitude", "longitude"]):
+            raise HTTPException(status_code=400, detail="Job location must include latitude and longitude")
+        if not all(k in worker_loc for k in ["latitude", "longitude"]):
+            raise HTTPException(status_code=400, detail="Worker location must include latitude and longitude")
+
+        # Upload proof image
+        proof_bytes = await proof_image.read()
+        if len(proof_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Proof image too large. Maximum 10MB")
+
+        proof_url = upload_to_ipfs(proof_bytes, f"proof_{job_id}.jpg")
+        if not proof_url:
+            raise HTTPException(status_code=500, detail="Failed to upload proof image to IPFS")
+
+        # Parse verification plan
+        if verification_plan:
+            try:
+                plan = json.loads(verification_plan)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Invalid verification plan JSON")
+        else:
+            plan = {
+                "task_category": "general",
+                "expected_transformation": {"before": "incomplete", "after": "completed"},
+                "verification_checklist": ["Work completed as described"],
+            }
+
+        # Run Eye Agent
+        comparison = await eye_agent.compare_before_after(
+            reference_photos=[reference_image_url],
+            proof_photos=[proof_url],
+            verification_plan=plan,
+            job_location=job_loc,
+            worker_location=worker_loc
+        )
         
+        verification = await eye_agent.verify_requirements(
+            proof_photos=[proof_url],
+            task_description=task_description,
+            verification_plan=plan,
+            comparison=comparison
+        )
+        
+        decision = eye_agent.make_final_decision(
+            verification_plan=plan,
+            comparison=comparison,
+            verification=verification
+        )
+
         return {
-            "status": "healthy",
-            "database": "ok" if db_ok else "error",
-            "blockchain": "neo-testnet",
-            "ai_service": "sudo-ai"
+            "success": True,
+            "job_id": job_id,
+            "verified": decision.get("verified", False),
+            "verdict": decision.get("verdict", "UNKNOWN"),
+            "confidence": decision.get("confidence", 0.0),
+            "reason": decision.get("reason", ""),
+            "location_check": {
+                "distance_meters": comparison.get("gps_verification", {}).get("distance_meters"),
+                "passed": comparison.get("gps_verification", {}).get("location_match", False),
+                "max_allowed": 50.0
+            },
+            "proof_image_url": proof_url,
+            "payment_recommended": decision.get("payment_recommended", False)
         }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        return {
-            "status": "degraded",
-            "error": str(e)
-        }
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 Starting GigShield Unified Backend API on http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

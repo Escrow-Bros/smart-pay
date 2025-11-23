@@ -36,6 +36,9 @@ class Database:
                     client_address TEXT NOT NULL,
                     worker_address TEXT,
                     description TEXT NOT NULL,
+                    location TEXT,
+                    latitude REAL,
+                    longitude REAL,
                     reference_photos TEXT,
                     proof_photos TEXT,
                     amount REAL NOT NULL,
@@ -62,19 +65,26 @@ class Database:
         description: str,
         reference_photos: List[str],
         amount: float,
-        tx_hash: str
+        tx_hash: str,
+        location: str = "",
+        latitude: float = 0.0,
+        longitude: float = 0.0
     ) -> Dict:
         """Insert new job into database"""
         with self.get_connection() as conn:
             conn.execute("""
                 INSERT INTO jobs (
                     job_id, client_address, description, 
+                    location, latitude, longitude,
                     reference_photos, amount, status, tx_hash
-                ) VALUES (?, ?, ?, ?, ?, 'OPEN', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
             """, (
                 job_id,
                 client_address,
                 description,
+                location,
+                latitude,
+                longitude,
                 json.dumps(reference_photos),
                 amount,
                 tx_hash
@@ -239,6 +249,42 @@ class Database:
             data["verification_result"] = json.loads(data["verification_result"])
         
         return data
+    
+    def _filter_for_worker_view(self, job: Dict) -> Dict:
+        """
+        Filter job data for worker's public view (available jobs)
+        Hides: client_address details, internal verification data
+        """
+        public_fields = {
+            'job_id': job.get('job_id'),
+            'description': job.get('description'),
+            'location': job.get('location', ''),
+            'latitude': job.get('latitude', 0.0),
+            'longitude': job.get('longitude', 0.0),
+            'reference_photos': job.get('reference_photos', []),
+            'amount': job.get('amount'),
+            'status': job.get('status'),
+            'created_at': job.get('created_at'),
+        }
+        return {k: v for k, v in public_fields.items() if v is not None}
+    
+    def _filter_for_client_view(self, job: Dict) -> Dict:
+        """
+        Filter job data for client view
+        Shows: everything except internal verification details
+        """
+        # Clients can see everything except raw verification internals
+        filtered = job.copy()
+        # Simplify verification result to just verdict
+        if filtered.get('verification_result'):
+            vr = filtered['verification_result']
+            if isinstance(vr, dict):
+                filtered['verification_summary'] = {
+                    'verified': vr.get('verified', False),
+                    'verdict': vr.get('verdict', 'UNKNOWN'),
+                }
+                del filtered['verification_result']
+        return filtered
 
 
 # Singleton instance
