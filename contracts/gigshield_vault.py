@@ -69,6 +69,19 @@ def _deploy(data: Any, update: bool):
         # Owner must be set via set_owner after deployment
 
 @public
+def onNEP17Payment(from_address: UInt160, amount: int, data: Any):
+    """
+    NEP-17 payment callback. Required to receive GAS transfers.
+    This is called automatically when someone transfers GAS to this contract.
+    
+    :param from_address: Address sending the GAS
+    :param amount: Amount of GAS being sent
+    :param data: Optional data attached to the transfer
+    """
+    # Accept all GAS payments (for job creation)
+    pass
+
+@public
 def create_job(job_id: int, client: UInt160, amount: int, details: str, reference_urls: str) -> bool:
     """
     Atomically create a job and deposit funds.

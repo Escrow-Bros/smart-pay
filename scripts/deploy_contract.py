@@ -91,39 +91,46 @@ async def main():
                 tx_hash_obj = types.UInt256.from_string(str(tx_hash))
                 app_log = await client.get_application_log_transaction(tx_hash_obj)
                 
-                # Look for Deploy notification from ContractManagement
-                if app_log and app_log.execution:
-                    execution = app_log.execution
-                    
-                    if execution.state.name == 'HALT':
-                        # Find Deploy notification
-                        for notif in execution.notifications:
-                            if notif.event_name == 'Deploy':
-                                # Contract hash is in the notification state
-                                state_items = notif.state.value if hasattr(notif.state, 'value') else []
-                                if state_items and len(state_items) > 0:
-                                    contract_hash_bytes = state_items[0].value
-                                    contract_hash = types.UInt160(contract_hash_bytes)
-                                    
-                                    print(f"\n✅ Contract deployed successfully!")
-                                    print(f"   Contract Hash: {contract_hash}")
-                                    print(f"   Gas Consumed: {execution.gas_consumed / 100_000_000:.8f} GAS")
-                                    
-                                    # Save to .env
-                                    env_path = root / ".env"
-                                    with open(env_path, "a") as f:
-                                        f.write(f"\n# Contract Deployment (TASK-006)\n")
-                                        f.write(f"# TX: {tx_hash}\n")
-                                        f.write(f"VAULT_CONTRACT_HASH={contract_hash}\n")
-                                    
-                                    print(f"\n📝 Contract hash saved to .env")
-                                    print(f"\n🔍 View: https://testnet.neotube.io/contract/{contract_hash}")
-                                    return
-                    
-                    else:
-                        print(f"❌ Transaction failed with state: {execution.state.name}")
-                        if hasattr(execution, 'exception') and execution.exception:
-                            print(f"   Exception: {execution.exception}")
+                # Look for Deploy notification
+                for notif in app_log.execution.notifications:
+                    if notif.event_name == 'Deploy':
+                        # Contract hash is in the first value of the notification state
+                        contract_hash = types.UInt160(notif.state.value[0].value)
+                        
+                        print(f"\n✅ Contract deployed successfully!")
+                        print(f"   Contract Hash: 0x{contract_hash}")
+                        print(f"   Gas Consumed: {app_log.execution.gas_consumed / 100_000_000:.8f} GAS")
+                        
+                        # Update .env with new contract hash
+                        env_path = root / ".env"
+                        env_lines = env_path.read_text().splitlines()
+                        
+                        # Remove old contract hash lines
+                        new_lines = []
+                        skip_next = False
+                        for line in env_lines:
+                            if "VAULT_CONTRACT_HASH" in line:
+                                skip_next = True
+                                continue
+                            if skip_next and (line.startswith("#") or not line.strip()):
+                                continue
+                            skip_next = False
+                            new_lines.append(line)
+                        
+                        # Add new contract hash
+                        new_lines.append("")
+                        new_lines.append("# Contract Deployment")
+                        new_lines.append(f"# TX: 0x{tx_hash}")
+                        new_lines.append(f"VAULT_CONTRACT_HASH=0x{contract_hash}")
+                        
+                        env_path.write_text("\n".join(new_lines) + "\n")
+                        
+                        print(f"\n📝 Contract hash saved to .env")
+                        print(f"\n🔍 View: https://testnet.neotube.io/contract/{contract_hash}")
+                        return
+                
+                # If we get here, no Deploy notification was found
+                print(f"⚠️  No Deploy notification found in transaction")
             
             except Exception as e:
                 print(f"⚠️  Could not automatically extract contract hash: {e}")

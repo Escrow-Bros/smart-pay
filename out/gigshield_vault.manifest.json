@@ -1,0 +1,327 @@
+{
+    "name": "gigshield_vault",
+    "groups": [],
+    "abi": {
+        "methods": [
+            {
+                "name": "_deploy",
+                "offset": 1693,
+                "parameters": [
+                    {
+                        "type": "Any",
+                        "name": "data"
+                    },
+                    {
+                        "type": "Boolean",
+                        "name": "update"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Void"
+            },
+            {
+                "name": "onNEP17Payment",
+                "offset": 12,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "from_address"
+                    },
+                    {
+                        "type": "Integer",
+                        "name": "amount"
+                    },
+                    {
+                        "type": "Any",
+                        "name": "data"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Void"
+            },
+            {
+                "name": "create_job",
+                "offset": 17,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    },
+                    {
+                        "type": "Hash160",
+                        "name": "client"
+                    },
+                    {
+                        "type": "Integer",
+                        "name": "amount"
+                    },
+                    {
+                        "type": "String",
+                        "name": "details"
+                    },
+                    {
+                        "type": "String",
+                        "name": "reference_urls"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "get_job_client",
+                "offset": 275,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_job_required",
+                "offset": 334,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Integer"
+            },
+            {
+                "name": "get_job_status",
+                "offset": 378,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Integer"
+            },
+            {
+                "name": "get_job_details",
+                "offset": 420,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "String"
+            },
+            {
+                "name": "get_job_reference_urls",
+                "offset": 464,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "String"
+            },
+            {
+                "name": "get_job_worker",
+                "offset": 515,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_agent_addr",
+                "offset": 574,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_treasury_addr",
+                "offset": 624,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "get_fee_bps",
+                "offset": 677,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Integer"
+            },
+            {
+                "name": "get_owner",
+                "offset": 707,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "set_owner",
+                "offset": 752,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "new_owner"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "set_agent",
+                "offset": 880,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "agent"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "set_treasury",
+                "offset": 964,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "treasury"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "set_fee_bps",
+                "offset": 1051,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "bps"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "assign_worker",
+                "offset": 1145,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    },
+                    {
+                        "type": "Hash160",
+                        "name": "worker"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "release_funds",
+                "offset": 1290,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            }
+        ],
+        "events": [
+            {
+                "name": "FundsReleased",
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "worker",
+                        "type": "Hash160"
+                    },
+                    {
+                        "name": "worker_amount",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "fee_amount",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "treasury",
+                        "type": "Hash160"
+                    }
+                ]
+            },
+            {
+                "name": "JobCreated",
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "client",
+                        "type": "Hash160"
+                    },
+                    {
+                        "name": "amount",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "reference_urls",
+                        "type": "String"
+                    }
+                ]
+            },
+            {
+                "name": "WorkerAssigned",
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "worker",
+                        "type": "Hash160"
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        {
+            "contract": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+            "methods": [
+                "serialize"
+            ]
+        },
+        {
+            "contract": "0xd2a4cff31913016155e38e474a2c06d08be276cf",
+            "methods": [
+                "transfer"
+            ]
+        }
+    ],
+    "trusts": [],
+    "features": {},
+    "supportedstandards": [],
+    "extra": null
+}
