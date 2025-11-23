@@ -4,3 +4,5 @@ python-dotenv
 fastapi
 uvicorn[standard]
 pydantic
+python-multipart
+Pillow>=10.0.0

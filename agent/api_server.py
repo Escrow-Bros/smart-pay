@@ -1,24 +1,24 @@
 """
-FastAPI Server for GigShield Paralegal Agent
-Provides REST API endpoints for testing with Postman
+GigShield Paralegal API - Job Architect (Upgraded)
+Handles image uploads and intelligent job validation
 
-Run with: uvicorn api_server:app --reload --port 8000
+Run with: uvicorn api_server_v2:app --reload --port 8000
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import asyncio
-from paralegal import extract_contract
+from paralegal import analyze_job_request
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="GigShield Paralegal API",
-    description="AI-powered contract extraction for the gig economy",
-    version="1.0.0"
+    title="GigShield Paralegal API - Job Architect",
+    description="AI-powered job validation with image verification",
+    version="2.0.0"
 )
 
-# Enable CORS for frontend integration
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,28 +27,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request/Response Models
-class JobRequest(BaseModel):
-    message: str
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "message": "Clean graffiti at 555 Market St for 10 GAS"
-            }
-        }
+# Response Models
+class ValidationResult(BaseModel):
+    clarity_issues: List[str]
+    image_mismatch: bool
+    mismatch_details: Optional[str]
+    image_shows: Optional[str] = None
 
-class ContractData(BaseModel):
-    task: Optional[str]
-    location: Optional[str]
-    price_amount: Optional[int]
-    price_currency: Optional[str]
-    missing_fields: List[str]
-
-class JobResponse(BaseModel):
+class JobAnalysisResponse(BaseModel):
     success: bool
-    data: ContractData
-    ready_for_contract: bool
+    status: str  # "complete" | "needs_clarification" | "mismatch"
+    data: dict
+    validation: ValidationResult
+    acceptance_criteria: List[str]
+    clarifying_questions: List[str]
     message: str
 
 # API Endpoints
@@ -57,10 +49,15 @@ async def root():
     """Health check endpoint"""
     return {
         "status": "online",
-        "service": "GigShield Paralegal API",
-        "version": "1.0.0",
+        "service": "GigShield Paralegal API - Job Architect",
+        "version": "2.0.0",
+        "features": [
+            "Clarity validation",
+            "Image verification (Sodu Vision)",
+            "Acceptance criteria generation"
+        ],
         "endpoints": {
-            "POST /api/jobs/parse": "Extract contract data from natural language",
+            "POST /api/jobs/analyze": "Analyze job with image (REQUIRED)",
             "GET /api/health": "Health check"
         }
     }
@@ -71,105 +68,84 @@ async def health_check():
     return {
         "status": "healthy",
         "ai_service": "Sudo AI",
-        "model": "gpt-4.1-mini"
+        "text_model": "gpt-4.1-mini",
+        "vision_model": "gpt-4-vision",
+        "validation_mode": "strict"
     }
 
-@app.post("/api/jobs/parse", response_model=JobResponse)
-async def parse_job(request: JobRequest):
+@app.post("/api/jobs/analyze")
+async def analyze_job(
+    message: str = Form(..., description="Job description text"),
+    reference_image: UploadFile = File(..., description="Photo of current state (REQUIRED)")
+):
     """
-    Extract structured contract data from natural language
+    Intelligent job analysis with validation and criteria generation
     
-    **Example Request:**
-    ```json
-    {
-        "message": "Clean graffiti at 555 Market St for 10 GAS"
-    }
-    ```
+    **Required:**
+    - message: Job description (e.g., "Clean graffiti at 555 Market St for 10 GAS")
+    - reference_image: Photo showing current state
     
-    **Example Response:**
-    ```json
-    {
-        "success": true,
-        "data": {
-            "task": "Clean graffiti",
-            "location": "555 Market St",
-            "price_amount": 10,
-            "price_currency": "GAS",
-            "missing_fields": []
-        },
-        "ready_for_contract": true,
-        "message": "Contract data extracted successfully"
-    }
-    ```
+    **Returns:**
+    - status: "complete" | "needs_clarification" | "mismatch"
+    - data: Extracted task, location, price
+    - validation: Clarity and image verification results
+    - acceptance_criteria: Auto-generated success criteria
+    - clarifying_questions: Questions if description is vague
+    
+    **Validation Mode:** STRICT (blocks submission if validation fails)
     """
     try:
-        # Extract contract using the Paralegal agent
-        result = await extract_contract(request.message)
+        # Read image bytes
+        image_bytes = await reference_image.read()
         
-        # Check if ready for contract creation
-        ready = len(result["missing_fields"]) == 0
+        # Validate image size (max 10MB)
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="Image too large. Maximum size is 10MB"
+            )
         
-        # Generate appropriate message
-        if ready:
-            message = "Contract data extracted successfully. Ready to create smart contract."
+        # Validate image type
+        if not reference_image.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file type. Must be an image (jpg, png, etc.)"
+            )
+        
+        # Analyze job request
+        result = await analyze_job_request(message, image_bytes)
+        
+        # Generate response message
+        if result["status"] == "needs_clarification":
+            message_text = "Job description is unclear. Please provide more details."
+        elif result["status"] == "mismatch":
+            message_text = "Image doesn't match the description. Please check and resubmit."
         else:
-            missing = ", ".join(result["missing_fields"])
-            message = f"Partial data extracted. Missing: {missing}"
+            message_text = "Job analyzed successfully! Ready to create contract."
         
-        return JobResponse(
+        return JobAnalysisResponse(
             success=True,
-            data=ContractData(**result),
-            ready_for_contract=ready,
-            message=message
+            status=result["status"],
+            data=result["data"],
+            validation=ValidationResult(**result["validation"]),
+            acceptance_criteria=result["acceptance_criteria"],
+            clarifying_questions=result["clarifying_questions"],
+            message=message_text
         )
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process request: {str(e)}"
+            detail=f"Failed to analyze job: {str(e)}"
         )
 
-@app.post("/api/jobs/validate")
-async def validate_job(request: JobRequest):
-    """
-    Validate a job description and return detailed feedback
-    """
-    try:
-        result = await extract_contract(request.message)
-        
-        feedback = []
-        if result["task"]:
-            feedback.append(f"✅ Task identified: {result['task']}")
-        else:
-            feedback.append("❌ Task not clear. Please describe what needs to be done.")
-        
-        if result["location"]:
-            feedback.append(f"✅ Location identified: {result['location']}")
-        else:
-            feedback.append("❌ Location missing. Please specify where the work should be done.")
-        
-        if result["price_amount"]:
-            feedback.append(f"✅ Price identified: {result['price_amount']} {result['price_currency']}")
-        else:
-            feedback.append("❌ Price missing. Please specify how much you're willing to pay.")
-        
-        return {
-            "success": True,
-            "valid": len(result["missing_fields"]) == 0,
-            "data": result,
-            "feedback": feedback
-        }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Validation failed: {str(e)}"
-        )
-
-# Run with: uvicorn api_server:app --reload --port 8000
+# Run server
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting GigShield Paralegal API Server...")
+    print("🚀 Starting GigShield Paralegal API - Job Architect...")
     print("📝 API Docs: http://localhost:8000/docs")
-    print("🔍 Test with Postman: POST http://localhost:8000/api/jobs/parse")
+    print("🔍 Test with Postman: POST http://localhost:8000/api/jobs/analyze")
+    print("⚠️  Reference image is REQUIRED")
     uvicorn.run(app, host="0.0.0.0", port=8000)
