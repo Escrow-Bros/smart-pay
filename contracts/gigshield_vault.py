@@ -7,6 +7,8 @@ from boa3.sc.storage import (
     put_uint160,
     get_int,
     put_int,
+    get_str,
+    put_str,
 )
 from boa3.sc.contracts import GasToken, StdLib
 from boa3.sc.utils import CreateNewEvent
@@ -23,7 +25,8 @@ on_job_created = CreateNewEvent(
     [
         ('job_id', int),
         ('client', UInt160),
-        ('amount', int)
+        ('amount', int),
+        ('reference_urls', str)
     ],
     'JobCreated'
 )
@@ -66,7 +69,7 @@ def _deploy(data: Any, update: bool):
         # Owner must be set via set_owner after deployment
 
 @public
-def create_job(job_id: int, client: UInt160, amount: int) -> bool:
+def create_job(job_id: int, client: UInt160, amount: int, details: str, reference_urls: str) -> bool:
     """
     Atomically create a job and deposit funds.
     Client must sign transaction with appropriate witness scope.
@@ -74,6 +77,8 @@ def create_job(job_id: int, client: UInt160, amount: int) -> bool:
     :param job_id: Unique identifier for the job
     :param client: Address of the client creating the job
     :param amount: Amount of GAS to lock (in Fixed8 format: 1 GAS = 100_000_000)
+    :param details: AI-generated acceptance criteria and job requirements
+    :param reference_urls: Comma-separated IPFS URLs of reference images (e.g., "ipfs://abc,ipfs://def")
     :return: True if successful, False otherwise
     """
     # Validate inputs
@@ -96,10 +101,12 @@ def create_job(job_id: int, client: UInt160, amount: int) -> bool:
     # Store job data
     put_uint160(_key(b"job_client", job_id), client)
     put_int(_key(b"job_required", job_id), amount)
+    put_str(_key(b"job_details", job_id), details)
+    put_str(_key(b"job_reference_urls", job_id), reference_urls)
     put_int(_key(b"job_status", job_id), STATUS_OPEN)
     
     # Emit event
-    on_job_created(job_id, client, amount)
+    on_job_created(job_id, client, amount, reference_urls)
     
     return True
 
@@ -114,6 +121,16 @@ def get_job_required(job_id: int) -> int:
 @public
 def get_job_status(job_id: int) -> int:
     return get_int(_key(b"job_status", job_id))
+
+@public
+def get_job_details(job_id: int) -> str:
+    """Get the AI-generated acceptance criteria for a job"""
+    return get_str(_key(b"job_details", job_id))
+
+@public
+def get_job_reference_urls(job_id: int) -> str:
+    """Get comma-separated IPFS URLs of reference images"""
+    return get_str(_key(b"job_reference_urls", job_id))
 
 @public
 def get_job_worker(job_id: int) -> UInt160:
@@ -151,9 +168,12 @@ def set_owner(new_owner: UInt160) -> bool:
     """
     current_owner = get_uint160(b'owner')
     
+    # Check if owner is the zero address (not set yet)
+    zero_address = UInt160()
+    
     # If no owner set yet (first time), allow anyone to claim
     # Otherwise, require current owner's witness
-    if len(current_owner) > 0:
+    if current_owner != zero_address:
         if not check_witness(current_owner):
             return False
     
