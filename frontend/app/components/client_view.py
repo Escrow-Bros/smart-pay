@@ -40,32 +40,9 @@ def create_job_form() -> rx.Component:
             location_picker(),
             
             # Hidden inputs to capture coordinates from JavaScript
-            rx.html(
-                """
-                <script>
-                (function() {
-                    window.addEventListener('reflexLocationSelected', function(e) {
-                        console.log('🎯 Reflex received location:', e.detail);
-                        
-                        // Store in hidden inputs that Reflex can read
-                        const latInput = document.getElementById('hidden-lat');
-                        const lngInput = document.getElementById('hidden-lng');
-                        
-                        if (latInput && lngInput) {
-                            latInput.value = e.detail.lat;
-                            lngInput.value = e.detail.lng;
-                            
-                            // Trigger change events
-                            latInput.dispatchEvent(new Event('change', { bubbles: true }));
-                            lngInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    });
-                })();
-                </script>
-                <input type="hidden" id="hidden-lat" />
-                <input type="hidden" id="hidden-lng" />
-                """
-            ),
+            # Hidden reactive inputs for lat/lng
+            rx.el.input(id="hidden-lat", type="hidden", on_change=GlobalState.set_job_latitude),
+            rx.el.input(id="hidden-lng", type="hidden", on_change=GlobalState.set_job_longitude),
 
             rx.el.div(
                 rx.el.label(
@@ -166,4 +143,3 @@ def client_view() -> rx.Component:
             wallet_view(),
         ),
     )
-

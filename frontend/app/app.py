@@ -114,13 +114,34 @@ function initLocationAutocomplete() {
                 const lng = place.geometry.location.lng();
                 const address = place.formatted_address;
                 
-                // Store coordinates in data attributes on the input
+                // Store coordinates in data attributes (survives re-renders)
                 input.setAttribute('data-lat', lat);
                 input.setAttribute('data-lng', lng);
                 
-                // Update input field with formatted address
+                // IMPORTANT: Update the input value AND trigger Reflex state update
                 input.value = address;
+                
+                // Trigger events to ensure state is updated (avoid input to prevent re-search)
                 input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+                // Update hidden reactive inputs so Reflex state captures coordinates
+                const latInput = document.getElementById('hidden-lat');
+                const lngInput = document.getElementById('hidden-lng');
+                if (latInput && lngInput) {
+                    latInput.value = lat;
+                    lngInput.value = lng;
+                    latInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    lngInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                
+                // Also store globally as backup
+                window.lastSelectedLocation = { lat, lng, address };
+                
+                console.log('✅ Location selected and saved:', { address, lat, lng });
+
+                // Suppress autocomplete search briefly to avoid dropdown reappearing after re-render
+                window.locationAutocompleteSuppressUntil = Date.now() + 1500;
                 
                 sessionToken = new google.maps.places.AutocompleteSessionToken();
             }
@@ -128,6 +149,10 @@ function initLocationAutocomplete() {
     }
     
     input.addEventListener('input', (e) => {
+        if (window.locationAutocompleteSuppressUntil && Date.now() < window.locationAutocompleteSuppressUntil) {
+            suggestionsDiv.classList.add('hidden');
+            return;
+        }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => searchLocation(e.target.value.trim()), 800);
     });
@@ -153,6 +178,51 @@ window.addEventListener('load', function() {
         input.removeAttribute('data-lng');
     }
 });
+
+// Helper function to extract coordinates before form submission
+window.extractLocationCoordinates = function() {
+    const input = document.getElementById('location-autocomplete-input');
+    if (input) {
+        const lat = parseFloat(input.getAttribute('data-lat')) || 0.0;
+        const lng = parseFloat(input.getAttribute('data-lng')) || 0.0;
+        console.log('📍 Extracted coordinates:', { lat, lng, address: input.value });
+        return { lat, lng, address: input.value };
+    }
+    return { lat: 0.0, lng: 0.0, address: '' };
+};
+
+// Restore location data after page re-renders (e.g., after image upload)
+const observer = new MutationObserver(function() {
+    const input = document.getElementById('location-autocomplete-input');
+    const latInput = document.getElementById('hidden-lat');
+    const lngInput = document.getElementById('hidden-lng');
+    if (input && window.lastSelectedLocation) {
+        // Restore data attributes and input value
+        if (!input.getAttribute('data-lat') && window.lastSelectedLocation.lat) {
+            input.setAttribute('data-lat', window.lastSelectedLocation.lat);
+            input.setAttribute('data-lng', window.lastSelectedLocation.lng);
+        }
+        if (window.lastSelectedLocation.address && input.value !== window.lastSelectedLocation.address) {
+            input.value = window.lastSelectedLocation.address;
+            // Trigger state update without re-search
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            // Hide suggestions if they were left open
+            suggestionsDiv.classList.add('hidden');
+        }
+        // Restore hidden inputs and trigger change for Reflex state
+        if (latInput && lngInput && window.lastSelectedLocation.lat) {
+            latInput.value = window.lastSelectedLocation.lat;
+            lngInput.value = window.lastSelectedLocation.lng;
+            latInput.dispatchEvent(new Event('change', { bubbles: true }));
+            lngInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+});
+
+// Watch for DOM changes
+if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+}
         """),
     ],
 )
@@ -162,4 +232,3 @@ app.add_page(index, route="/")
 
 # Main app page with polling
 app.add_page(app_page, route="/app", on_load=GlobalState.start_polling)
-

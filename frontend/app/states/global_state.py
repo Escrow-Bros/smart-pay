@@ -138,17 +138,24 @@ class GlobalState(rx.State):
     def set_job_location(self, value: str):
         """Sets the job location and extracts coordinates from input data attributes."""
         self.job_location = value
-        # Coordinates will be read from the input element's data attributes when submitting
+        # Coordinates are stored in the input's data attributes and will be extracted on submit
+        print(f"📝 Location updated in state: '{value}'")
     
     @rx.event
-    def set_job_latitude(self, value: float):
-        """Sets the job latitude."""
-        self.job_latitude = value
+    def set_job_latitude(self, value: str):
+        """Sets the job latitude from string input."""
+        try:
+            self.job_latitude = float(value)
+        except Exception:
+            self.job_latitude = 0.0
     
     @rx.event
-    def set_job_longitude(self, value: float):
-        """Sets the job longitude."""
-        self.job_longitude = value
+    def set_job_longitude(self, value: str):
+        """Sets the job longitude from string input."""
+        try:
+            self.job_longitude = float(value)
+        except Exception:
+            self.job_longitude = 0.0
 
     @rx.event
     async def fetch_wallet_balance(self):
@@ -271,6 +278,12 @@ class GlobalState(rx.State):
     @rx.event
     async def create_job(self):
         """Handles the creation of a new job via backend API."""
+        
+        print("🚀 CREATE_JOB called")
+        print(f"  Current location: '{self.job_location}'")
+        print(f"  Current latitude: {self.job_latitude}")
+        print(f"  Current longitude: {self.job_longitude}")
+        
         if not self.current_user:
             yield rx.toast.error("Please connect wallet first")
             return
@@ -309,22 +322,40 @@ class GlobalState(rx.State):
             # Create job on blockchain + database
             yield rx.toast.info("Creating job on blockchain...")
             
-            # Extract coordinates from input data attributes (set by JavaScript)
-            # If not available, use 0.0 as fallback
-            lat = self.job_latitude if self.job_latitude != 0.0 else 0.0
-            lng = self.job_longitude if self.job_longitude != 0.0 else 0.0
+            # Log what we're about to submit
+            print("=" * 60)
+            print("📤 SUBMITTING JOB DATA:")
+            print(f"  Client Address: {self.current_user}")
+            print(f"  Description: {self.job_description[:100]}..." if len(self.job_description) > 100 else f"  Description: {self.job_description}")
+            print(f"  Location: {self.job_location}")
+            print(f"  Latitude: {self.job_latitude}")
+            print(f"  Longitude: {self.job_longitude}")
+            print(f"  IPFS URLs: {len(ipfs_urls)} images")
+            for i, url in enumerate(ipfs_urls, 1):
+                print(f"    {i}. {url}")
+            print("=" * 60)
+            
+            # Use coordinates from state
+            lat = self.job_latitude
+            lng = self.job_longitude
+            
+            payload = {
+                "client_address": self.current_user,
+                "description": self.job_description,
+                "reference_photos": ipfs_urls,
+                "location": self.job_location,
+                "latitude": lat,
+                "longitude": lng
+            }
+            
+            print("📦 REQUEST PAYLOAD:")
+            print(payload)
+            print("=" * 60)
             
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{API_BASE_URL}/api/jobs/create",
-                    json={
-                        "client_address": self.current_user,
-                        "description": self.job_description,
-                        "reference_photos": ipfs_urls,
-                        "location": self.job_location,
-                        "latitude": lat,
-                        "longitude": lng
-                    },
+                    json=payload,
                     timeout=60.0
                 )
                 
@@ -443,6 +474,9 @@ class GlobalState(rx.State):
         self.job_location = ""
         self.job_latitude = 0.0
         self.job_longitude = 0.0
+        self.client_uploaded_images = []
+        self.client_ipfs_urls = []
+        self.uploaded_image = ""  # Worker proof image
         
         if self.wallet_address:
             async for _ in self.fetch_wallet_balance():
@@ -657,4 +691,3 @@ class GlobalState(rx.State):
                 print(f"Error deleting file {filename}: {e}")
 
             yield rx.toast.info(f"Image {filename} removed")
-
