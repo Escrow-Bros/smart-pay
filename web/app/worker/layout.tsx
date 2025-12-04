@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { formatGasWithUSD } from '@/lib/currency';
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -51,6 +52,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
                         <p className="text-2xl font-bold text-green-400">
                             {state.walletBalance.toFixed(2)} <span className="text-sm text-slate-500">GAS</span>
                         </p>
+                        <p className="text-xs text-slate-400 mt-1">≈ {formatGasWithUSD(state.walletBalance).usd}</p>
                         {state.workerStats && (
                             <div className="mt-3 pt-3 border-t border-slate-700/50">
                                 <p className="text-xs text-slate-400">

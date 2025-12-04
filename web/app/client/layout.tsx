@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { formatGasWithUSD } from '@/lib/currency';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -49,6 +50,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         <p className="text-sm text-white font-semibold mb-3">{state.currentUser || 'Guest'}</p>
                         <p className="text-xs text-slate-500 mb-1">Balance</p>
                         <p className="text-2xl font-bold text-cyan-400">{state.walletBalance.toFixed(2)} <span className="text-sm text-slate-500">GAS</span></p>
+                        <p className="text-xs text-slate-400 mt-1">≈ {formatGasWithUSD(state.walletBalance).usd}</p>
                     </div>
                     <Link
                         href="/"

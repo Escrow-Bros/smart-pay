@@ -56,4 +56,4 @@ echo "   Press Ctrl+C to stop the server"
 echo ""
 
 # Run directly (will block until Ctrl+C)
-python api.py
+python3 api.py

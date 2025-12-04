@@ -7,6 +7,8 @@ import ChatInput from '@/components/ChatInput';
 import ImageUpload from '@/components/ImageUpload';
 import LocationPicker from '@/components/LocationPicker';
 import { apiClient } from '@/lib/api';
+import { usdToGas, formatGasWithUSD } from '@/lib/currency';
+import type { UploadedImage } from '@/lib/types';
 
 interface Message {
   id: string;
@@ -121,8 +123,8 @@ export default function ConversationalJobCreator() {
     }
   };
 
-  const handleImageUpload = (file: File, preview: string) => {
-    addUploadedImage(file, preview);
+  const handleImageUpload = (image: UploadedImage) => {
+    addUploadedImage(image);
     
     // Send notification to backend (handleSendMessage will add the chat message)
     handleSendMessage('[User uploaded reference image]');
@@ -146,6 +148,15 @@ export default function ConversationalJobCreator() {
     setIsCreating(true);
 
     try {
+      // Convert USD to GAS if needed
+      let paymentAmount = extractedData.price_amount || 5.0;
+      
+      if (extractedData.price_currency?.toUpperCase() === 'USD') {
+        // Convert USD to GAS
+        paymentAmount = usdToGas(paymentAmount);
+        console.log(`Converting ${extractedData.price_amount} USD to ${paymentAmount.toFixed(2)} GAS`);
+      }
+
       // Upload images to IPFS
       const ipfsUrls = await Promise.all(
         state.clientUploadedImages.map(async (img) => {
@@ -161,7 +172,7 @@ export default function ConversationalJobCreator() {
         location: extractedData.location || state.jobLocation,
         latitude: state.jobLatitude,
         longitude: state.jobLongitude,
-        amount: extractedData.price_amount || 5.0,
+        amount: paymentAmount, // Always in GAS
         verification_plan: {
           task_category: extractedData.task || 'general',
           verification_checklist: [],
@@ -172,7 +183,13 @@ export default function ConversationalJobCreator() {
       const result = await apiClient.createJob(payload);
 
       if (result.job) {
-        alert(`Job created successfully! ID: ${result.job.job_id}`);
+        const originalAmount = extractedData.price_amount || paymentAmount;
+        const currency = extractedData.price_currency?.toUpperCase() || 'GAS';
+        const displayAmount = currency === 'USD' 
+          ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)` 
+          : `${paymentAmount.toFixed(2)} GAS`;
+          
+        alert(`Job created successfully! ID: ${result.job.job_id}\nPayment: ${displayAmount}`);
         
         // Clear session
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`, {
@@ -262,6 +279,10 @@ export default function ConversationalJobCreator() {
               {extractedData.price_amount && (
                 <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30">
                   ✓ Price: {extractedData.price_amount} {extractedData.price_currency || 'GAS'}
+                  {extractedData.price_currency?.toUpperCase() === 'USD' && 
+                    ` (~${usdToGas(extractedData.price_amount).toFixed(2)} GAS)`}
+                  {extractedData.price_currency?.toUpperCase() === 'GAS' && 
+                    ` (~${formatGasWithUSD(extractedData.price_amount).usd})`}
                 </span>
               )}
               {state.clientUploadedImages.length > 0 && (
