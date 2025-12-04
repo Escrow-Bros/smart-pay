@@ -544,101 +544,286 @@ Return ONLY valid JSON:
         verification: Dict
     ) -> Dict:
         """
-        Combine all signals into final verdict
+        Two-Stage Verification System (Production-Grade)
         
-        Multi-layer checks ensure fraud prevention
+        STAGE 1: Critical Checks (Must Pass)
+        - GPS within 500m (HARD FAIL if exceeded)
+        - Visible transformation (HARD FAIL if no work detected)
+        
+        STAGE 2: Quality Scoring (0-100 points)
+        - GPS Quality: 25 points
+        - Visual Location Match: 20 points
+        - Transformation Quality: 25 points
+        - Coverage Consistency: 15 points
+        - Requirements Met: 15 points
+        
+        STAGE 3: Decision Thresholds
+        - ≥70 points: APPROVED ✅
+        - 50-69 points: NEEDS_IMPROVEMENT ⚠️ (can resubmit)
+        - <50 points: REJECTED ❌
+        
+        Benefits:
+        - Ensures work is done (critical checks)
+        - Forgives photo quality issues (scoring)
+        - Transparent feedback (see exact score)
+        - Professional presentation (for demos)
         """
         
-        # Check 0: GPS Location must match (CRITICAL - 50m radius requirement)
-        if 'gps_verification' in comparison:
-            gps_check = comparison['gps_verification']
-            if not gps_check.get('location_match', False):
-                distance = gps_check.get('distance_meters', 'unknown')
-                distance_text = f"{distance:.1f}m" if isinstance(distance, (int, float)) else "unknown distance"
-                
-                return {
-                    "verified": False,
-                    "confidence": 0.0,
-                    "verdict": "REJECTED",
-                    "reason": f"Worker location verification failed: {gps_check.get('reasoning', 'Location does not match')}",
-                    "category": "GPS_LOCATION_FAILED",
-                    "issues": [
-                        f"Worker must be within 50m of job location",
-                        f"Actual distance: {distance_text}",
-                        "Please ensure you are physically at the job site"
-                    ],
-                    "gps_data": {
-                        "distance_meters": distance,
-                        "max_allowed_meters": 50.0,
-                        "location_match": False,
-                        "reasoning": gps_check.get('reasoning')
-                    },
-                    "payment_recommended": False
-                }
+        # ===================================================================
+        # STAGE 1: CRITICAL CHECKS (Must Pass)
+        # ===================================================================
         
-        # Check 1: Location must match
-        if not comparison['same_location']['verdict']:
+        # Critical Check 1: GPS - Must be within 500m (fraud detection)
+        gps_check = comparison.get('gps_verification', {})
+        distance = gps_check.get('distance_meters', 9999)
+        
+        if not gps_check.get('location_match', False):
+            # GPS failed - worker not at job site
+            distance_text = f"{distance:.1f}m" if isinstance(distance, (int, float)) else "unknown"
+            
             return {
                 "verified": False,
                 "confidence": 0.0,
-                "reason": "Proof photos are not of the same location as reference photos.",
-                "category": "LOCATION_MISMATCH",
-                "issues": comparison['same_location'].get('reasoning', 'Features do not match')
+                "verdict": "REJECTED",
+                "reason": f"Worker not at job location ({distance_text} away - max 500m)",
+                "category": "GPS_LOCATION_FAILED",
+                "score": 0,
+                "breakdown": {
+                    "gps_quality": 0,
+                    "visual_location": 0,
+                    "transformation": 0,
+                    "coverage": 0,
+                    "requirements": 0
+                },
+                "issues": [
+                    f"Worker location: {distance_text} from job site",
+                    "Maximum allowed: 500m",
+                    "Please ensure you are physically at the job location"
+                ],
+                "gps_data": {
+                    "distance_meters": distance,
+                    "max_allowed_meters": 500.0,
+                    "tier": gps_check.get('tier', 'failed'),
+                    "reasoning": gps_check.get('reasoning')
+                },
+                "payment_recommended": False,
+                "can_resubmit": True,
+                "suggestions": [
+                    "Go to the actual job location",
+                    "Enable high-accuracy GPS on your device",
+                    "Wait for GPS to stabilize (10-30 seconds)"
+                ]
             }
         
-        # Check 2: High confidence required on location match
-        if comparison['same_location'].get('confidence', 0.0) < 0.80:
+        # Critical Check 2: Transformation - Must show visible work
+        transformation_detected = comparison['transformation_detected'].get('verdict', False)
+        
+        if not transformation_detected:
             return {
                 "verified": False,
-                "confidence": comparison['same_location'].get('confidence', 0.0),
-                "reason": "Cannot confirm proof photos are of same location. Please retake with clearly matching features.",
-                "category": "UNCERTAIN_LOCATION",
-                "issues": "Low confidence in location match"
+                "confidence": 0.0,
+                "verdict": "REJECTED",
+                "reason": "No visible work completed",
+                "category": "NO_WORK_DETECTED",
+                "score": 0,
+                "breakdown": {
+                    "gps_quality": 0,
+                    "visual_location": 0,
+                    "transformation": 0,
+                    "coverage": 0,
+                    "requirements": 0
+                },
+                "issues": [
+                    "Expected transformation not visible in photos",
+                    f"Expected: {verification_plan.get('expected_transformation', {}).get('after', 'completed work')}",
+                    "Actual: No significant changes detected"
+                ],
+                "payment_recommended": False,
+                "can_resubmit": True,
+                "suggestions": [
+                    "Complete the work as described",
+                    "Take clear before/after photos showing the change",
+                    "Ensure lighting is good enough to see the work"
+                ]
             }
         
-        # Check 3: Transformation must be detected
-        if not comparison['transformation_detected'].get('matches_expected', False):
+        # ===================================================================
+        # STAGE 2: QUALITY SCORING (0-100 points)
+        # ===================================================================
+        
+        score = 0
+        max_score = 100
+        breakdown = {}
+        
+        # Component 1: GPS Quality (25 points)
+        gps_confidence = gps_check.get('confidence', 0.5)
+        gps_tier = gps_check.get('tier', 'acceptable')
+        
+        if gps_tier == 'excellent':
+            gps_score = 25
+        elif gps_tier == 'good':
+            gps_score = 20
+        elif gps_tier == 'acceptable':
+            gps_score = 15
+        else:
+            gps_score = 25 * gps_confidence  # Fallback to confidence-based
+        
+        score += gps_score
+        breakdown['gps_quality'] = round(gps_score, 1)
+        
+        # Component 2: Visual Location Match (20 points)
+        location_verdict = comparison['same_location'].get('verdict', False)
+        location_confidence = comparison['same_location'].get('confidence', 0.0)
+        
+        # Dynamic threshold based on GPS
+        # If GPS is strong, lower vision requirement (they're complementary)
+        if gps_confidence >= 0.8:
+            required_vision_confidence = 0.50  # GPS verified, vision just confirms
+        else:
+            required_vision_confidence = 0.60  # Need stronger vision if GPS weak
+        
+        if location_verdict and location_confidence >= required_vision_confidence:
+            visual_score = 20 * min(location_confidence / required_vision_confidence, 1.0)
+        elif location_verdict:
+            visual_score = 20 * (location_confidence / required_vision_confidence) * 0.7
+        else:
+            visual_score = 20 * location_confidence * 0.5
+        
+        score += visual_score
+        breakdown['visual_location'] = round(visual_score, 1)
+        
+        # Component 3: Transformation Quality (25 points)
+        matches_expected = comparison['transformation_detected'].get('matches_expected', False)
+        
+        if matches_expected:
+            transform_score = 25
+        else:
+            # Partial credit if transformation visible but unclear
+            transform_score = 15
+        
+        score += transform_score
+        breakdown['transformation'] = round(transform_score, 1)
+        
+        # Component 4: Coverage Consistency (15 points)
+        coverage_verdict = comparison['coverage_consistency'].get('verdict', False)
+        coverage_ratio = comparison['coverage_consistency'].get('coverage_ratio', 0.5)
+        
+        if coverage_verdict:
+            coverage_score = 15
+        else:
+            coverage_score = 15 * coverage_ratio
+        
+        score += coverage_score
+        breakdown['coverage'] = round(coverage_score, 1)
+        
+        # Component 5: Requirements Met (15 points)
+        requirements_verdict = verification.get('verdict', 'REJECTED')
+        requirements_confidence = verification.get('confidence', 0.5)
+        
+        if requirements_verdict == 'APPROVED':
+            req_score = 15 * requirements_confidence
+        else:
+            req_score = 15 * requirements_confidence * 0.5
+        
+        score += req_score
+        breakdown['requirements'] = round(req_score, 1)
+        
+        # ===================================================================
+        # STAGE 3: FINAL DECISION BASED ON SCORE
+        # ===================================================================
+        
+        percentage = (score / max_score) * 100
+        
+        if percentage >= 70:
+            # APPROVED: High quality work
             return {
-                "verified": False,
-                "confidence": 0.5,
-                "reason": f"Expected transformation not detected. Expected: {verification_plan.get('expected_transformation', {}).get('after', 'completed work')}",
-                "category": "INCOMPLETE_WORK",
-                "issues": comparison['transformation_detected'].get('changes', [])
+                "verified": True,
+                "confidence": score / max_score,
+                "verdict": "APPROVED",
+                "reason": f"Work verified with {percentage:.0f}% quality score",
+                "category": "APPROVED",
+                "score": round(percentage, 1),
+                "breakdown": breakdown,
+                "gps_data": {
+                    "distance_meters": distance,
+                    "tier": gps_tier,
+                    "confidence": gps_confidence
+                },
+                "quality_indicators": {
+                    "location_verified": location_verdict,
+                    "transformation_clear": matches_expected,
+                    "coverage_adequate": coverage_verdict,
+                    "requirements_met": requirements_verdict == 'APPROVED'
+                },
+                "payment_recommended": True
             }
         
-        # Check 4: Coverage must be consistent
-        if not comparison['coverage_consistency']['verdict']:
+        elif percentage >= 50:
+            # NEEDS IMPROVEMENT: Work done but quality issues
             return {
                 "verified": False,
-                "confidence": 0.5,
-                "reason": "Proof photo shows different coverage than reference. Please show same area.",
-                "category": "COVERAGE_MISMATCH",
-                "issues": comparison['coverage_consistency'].get('concerns', [])
+                "confidence": score / max_score,
+                "verdict": "NEEDS_IMPROVEMENT",
+                "reason": f"Work quality insufficient ({percentage:.0f}% score - need 70%)",
+                "category": "NEEDS_IMPROVEMENT",
+                "score": round(percentage, 1),
+                "breakdown": breakdown,
+                "gps_data": {
+                    "distance_meters": distance,
+                    "tier": gps_tier,
+                    "confidence": gps_confidence
+                },
+                "issues": self._generate_improvement_suggestions(breakdown, comparison, verification),
+                "payment_recommended": False,
+                "can_resubmit": True,
+                "suggestions": [
+                    "Retake photos with better lighting",
+                    "Show complete work area (not just partial)",
+                    "Ensure before/after photos match clearly"
+                ]
             }
         
-        # Check 5: AI verification must approve
-        if verification['verdict'] != "APPROVED":
+        else:
+            # REJECTED: Significant quality issues
             return {
                 "verified": False,
-                "confidence": verification.get('confidence', 0.5),
-                "reason": verification.get('reasoning', 'Work does not meet requirements'),
-                "category": "REQUIREMENTS_NOT_MET",
+                "confidence": score / max_score,
+                "verdict": "REJECTED",
+                "reason": f"Work does not meet requirements ({percentage:.0f}% score)",
+                "category": "REJECTED",
+                "score": round(percentage, 1),
+                "breakdown": breakdown,
+                "gps_data": {
+                    "distance_meters": distance,
+                    "tier": gps_tier,
+                    "confidence": gps_confidence
+                },
                 "issues": verification.get('issues', []),
+                "payment_recommended": False,
+                "can_resubmit": True,
                 "suggestions": verification.get('suggestions', [])
             }
+    
+    def _generate_improvement_suggestions(self, breakdown: Dict, comparison: Dict, verification: Dict) -> List[str]:
+        """Generate specific improvement suggestions based on low scores"""
+        suggestions = []
         
-        # All checks passed - APPROVE!
-        return {
-            "verified": True,
-            "confidence": verification.get('confidence', 0.9),
-            "reason": verification.get('reasoning', 'All requirements met. Work completed successfully.'),
-            "category": "APPROVED",
-            "quality_score": verification.get('confidence', 0.9),
-            "comparison_data": {
-                "location_confidence": comparison['same_location'].get('confidence', 0.0),
-                "transformation": comparison['transformation_detected'].get('changes', [])
-            }
-        }
+        if breakdown.get('gps_quality', 0) < 15:
+            suggestions.append("Move closer to the job location (currently too far)")
+        
+        if breakdown.get('visual_location', 0) < 12:
+            suggestions.append("Retake photo showing clearly matching features (outlets, windows, landmarks)")
+        
+        if breakdown.get('transformation', 0) < 15:
+            suggestions.append("Show clearer evidence of work completed (before/after difference)")
+        
+        if breakdown.get('coverage', 0) < 10:
+            suggestions.append("Show full work area (not just small section)")
+        
+        if breakdown.get('requirements', 0) < 10:
+            suggestions.append("Address specific requirements: " + ", ".join(verification.get('issues', [])[:2]))
+        
+        return suggestions if suggestions else ["Improve overall photo quality and ensure work is clearly visible"]
     
     # ========================================================================
     # PLACEHOLDER METHODS - To be implemented with actual integrations

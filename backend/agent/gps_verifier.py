@@ -1,5 +1,5 @@
 """
-GPS Location Verifier - TASK-014 Integration
+GPS Location Verifier
 Verifies that proof photos were taken at the correct job location
 
 This is part of the Detective agent (context verification)
@@ -39,22 +39,28 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 def verify_gps_location(
     reference_gps: Dict,
     proof_gps: Dict,
-    max_distance_meters: float = 50.0
+    max_distance_meters: float = 200.0
 ) -> Dict:
     """
     Verify that proof photo was taken at the job location
     
+    Tiered verification:
+    - 0-200m: PASS (high confidence)
+    - 201-500m: WARN (reduced confidence, but allow)
+    - 501+m: FAIL (likely fraud)
+    
     Args:
         reference_gps: {"latitude": float, "longitude": float, "accuracy": float}
         proof_gps: {"latitude": float, "longitude": float, "accuracy": float}
-        max_distance_meters: Maximum allowed distance (default 50 meters)
+        max_distance_meters: Maximum allowed distance (default 200 meters)
     
     Returns:
         {
             "location_match": bool,
             "distance_meters": float,
             "confidence": float,
-            "reasoning": str
+            "reasoning": str,
+            "tier": str  # 'excellent', 'good', 'acceptable', 'failed'
         }
     """
     print("reference_gps", reference_gps)
@@ -84,38 +90,48 @@ def verify_gps_location(
         distance = calculate_distance(ref_lat, ref_lon, proof_lat, proof_lon)
         
         # Account for GPS accuracy
-        # If GPS accuracy is poor, increase tolerance
         total_accuracy = ref_accuracy + proof_accuracy
         adjusted_max_distance = max_distance_meters + total_accuracy
         
-        # Determine match
-        location_match = distance <= adjusted_max_distance
+        # Tiered verification with progressive thresholds
+        # Tier 1: Excellent (0-200m) - High confidence
+        # Tier 2: Good (201-350m) - Medium-high confidence  
+        # Tier 3: Acceptable (351-500m) - Lower confidence but pass
+        # Tier 4: Failed (501+m) - Reject
         
-        # Calculate confidence based on distance and accuracy
-        if location_match:
-            # Confidence decreases as distance approaches limit
-            confidence = 1.0 - (distance / adjusted_max_distance)
-            confidence = max(0.5, min(1.0, confidence))  # Clamp between 0.5-1.0
+        if distance <= 200:
+            tier = 'excellent'
+            location_match = True
+            confidence = 1.0 - (distance / 200) * 0.2  # 0.8-1.0 range
+            reasoning = f"Worker at job site ({distance:.1f}m away - excellent)"
+        elif distance <= 350:
+            tier = 'good'
+            location_match = True
+            confidence = 0.7 - (distance - 200) / 150 * 0.2  # 0.5-0.7 range
+            reasoning = f"Worker near job site ({distance:.1f}m away - acceptable with GPS accuracy)"
+        elif distance <= 500:
+            tier = 'acceptable'
+            location_match = True
+            confidence = 0.5 - (distance - 350) / 150 * 0.1  # 0.4-0.5 range
+            reasoning = f"Worker in vicinity ({distance:.1f}m away - marginal, check photos carefully)"
         else:
-            # Low confidence if locations don't match
+            tier = 'failed'
+            location_match = False
             confidence = 0.1
-        
-        # Generate reasoning
-        if location_match:
-            reasoning = f"Photos taken {distance:.1f}m apart (within {adjusted_max_distance:.1f}m tolerance)"
-        else:
-            reasoning = f"Photos taken {distance:.1f}m apart (exceeds {adjusted_max_distance:.1f}m limit)"
+            reasoning = f"Worker too far from job site ({distance:.1f}m away - max 500m)"
         
         return {
             "location_match": location_match,
             "distance_meters": round(distance, 2),
             "confidence": round(confidence, 3),
             "reasoning": reasoning,
+            "tier": tier,
             "gps_accuracy": {
                 "reference": ref_accuracy,
                 "proof": proof_accuracy,
                 "total": total_accuracy
-            }
+            },
+            "threshold_used": adjusted_max_distance
         }
         
     except Exception as e:
@@ -208,48 +224,3 @@ def extract_gps_from_exif(image_bytes: bytes) -> Optional[Dict]:
     except Exception as e:
         print(f"⚠️ Could not extract GPS from image: {e}")
         return None
-
-# ============================================================================
-# INTEGRATION WITH APRO ORACLE (TASK-014 - FUTURE)
-# ============================================================================
-
-async def verify_with_apro_oracle(
-    gps_location: Dict,
-    timestamp: str,
-    expected_conditions: Dict = None
-) -> Dict:
-    """
-    TODO (TASK-014): Integrate with Apro Oracle
-    
-    Verifies:
-    - Weather at location matches expected
-    - Timestamp is within work window
-    - Location is valid
-    
-    Args:
-        gps_location: {"latitude": float, "longitude": float}
-        timestamp: ISO timestamp from photo
-        expected_conditions: Expected weather, time window, etc.
-    
-    Returns:
-        {
-            "weather_match": bool,
-            "timestamp_valid": bool,
-            "location_valid": bool,
-            "confidence": float
-        }
-    """
-    # TODO: Implement Apro Oracle SDK integration
-    # This will call external oracle for:
-    # - Weather verification
-    # - Timestamp validation
-    # - Location verification
-    
-    print("⚠️ Apro Oracle integration pending (TASK-014)")
-    
-    return {
-        "weather_match": True,  # Placeholder
-        "timestamp_valid": True,
-        "location_valid": True,
-        "confidence": 0.8
-    }
