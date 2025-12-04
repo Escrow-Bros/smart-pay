@@ -224,18 +224,21 @@ export default function ConversationalJobCreator() {
 
   return (
     <div className="animate-in fade-in duration-500 h-full flex flex-col">
-      <div className="mb-4">
-        <h2 className="text-3xl font-bold text-white mb-2">Create Job (AI Assistant)</h2>
-        <p className="text-slate-400">
+      {/* Header Section */}
+      <div className="mb-3 sm:mb-4 px-1">
+        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-1 sm:mb-2">
+          Create Job (AI Assistant)
+        </h2>
+        <p className="text-sm sm:text-base text-slate-400">
           Chat with our AI to create your blockchain-secured gig posting.
         </p>
       </div>
 
-      <div className="flex-1 bg-slate-950/50 rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
+      <div className="flex-1 bg-slate-950/50 rounded-2xl sm:rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
         {/* Chat Messages */}
         <div 
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-6 space-y-4"
+          className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4"
         >
           {messages.map((msg) => (
             <ChatMessage
@@ -263,21 +266,23 @@ export default function ConversationalJobCreator() {
 
         {/* Progress Indicators */}
         {(extractedData.task || extractedData.location || extractedData.price_amount) && (
-          <div className="px-6 py-4 bg-slate-900/50 border-t border-slate-800">
-            <div className="text-xs font-semibold text-slate-400 mb-2">Collected Info:</div>
-            <div className="flex flex-wrap gap-2">
+          <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 bg-slate-900/50 border-t border-slate-800">
+            <div className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
+              Collected Info:
+            </div>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {extractedData.task && (
-                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30">
-                  ✓ Task: {extractedData.task}
+                <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30 whitespace-nowrap">
+                  ✓ Task: {extractedData.task.length > 20 ? `${extractedData.task.substring(0, 20)}...` : extractedData.task}
                 </span>
               )}
               {extractedData.location && (
-                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30">
-                  ✓ Location: {extractedData.location}
+                <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30 whitespace-nowrap">
+                  ✓ Location: {extractedData.location.length > 20 ? `${extractedData.location.substring(0, 20)}...` : extractedData.location}
                 </span>
               )}
               {extractedData.price_amount && (
-                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30">
+                <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30 whitespace-nowrap">
                   ✓ Price: {extractedData.price_amount} {extractedData.price_currency || 'GAS'}
                   {extractedData.price_currency?.toUpperCase() === 'USD' && 
                     ` (~${usdToGas(extractedData.price_amount).toFixed(2)} GAS)`}
@@ -286,7 +291,7 @@ export default function ConversationalJobCreator() {
                 </span>
               )}
               {state.clientUploadedImages.length > 0 && (
-                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30">
+                <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30 whitespace-nowrap">
                   ✓ Image uploaded
                 </span>
               )}
@@ -296,8 +301,8 @@ export default function ConversationalJobCreator() {
 
         {/* Quick Actions */}
         {!isComplete && (
-          <div className="px-6 py-3 bg-slate-900/30 border-t border-slate-800">
-            <div className="flex gap-2">
+          <div className="px-3 sm:px-4 md:px-6 lg:px-12 xl:px-20 py-4 sm:py-5 bg-slate-900/30 border-t border-slate-800">
+            <div className="max-w-3xl mx-auto flex flex-col gap-4 sm:gap-5">
               <ImageUpload
                 images={state.clientUploadedImages}
                 onAdd={handleImageUpload}
@@ -314,11 +319,11 @@ export default function ConversationalJobCreator() {
 
         {/* Create Button */}
         {isComplete && (
-          <div className="px-6 py-4 bg-gradient-to-r from-green-500/10 to-cyan-500/10 border-t border-green-500/30">
+          <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 bg-gradient-to-r from-green-500/10 to-cyan-500/10 border-t border-green-500/30">
             <button
               onClick={handleCreateJob}
               disabled={isCreating}
-              className="w-full bg-gradient-to-r from-green-500 to-cyan-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-green-500 to-cyan-600 text-white font-semibold py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl text-sm sm:text-base hover:shadow-lg hover:shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] touch-manipulation"
             >
               {isCreating ? 'Creating Job...' : '✓ Create Job on Blockchain'}
             </button>
