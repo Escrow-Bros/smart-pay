@@ -19,12 +19,13 @@ class AgentConfig:
     """Configuration for GigSmartPay AI Agents"""
     
     # Sudo AI Configuration
-    SUDO_API_KEY = os.getenv("OPENAI_API_KEY")
-    SUDO_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.sudoai.com/v1")
+    SUDO_API_KEY = os.getenv("SUDO_API_KEY")
+    SUDO_SERVER_URL = os.getenv("SUDO_SERVER_URL")
     
     # Model Selection
-    TEXT_MODEL = "gpt-4"           # For text extraction and analysis
-    VISION_MODEL = "gpt-4o"        # For image verification
+    TEXT_MODEL = "gpt-4.1"         # For text extraction and analysis (Paralegal)
+    REASONING_MODEL = "gpt-4.1"    # For verification reasoning (Eye)
+    VISION_MODEL = "gpt-4o"        # For image verification (Vision)
     
     # Agent Behavior
     TEMPERATURE = 0.1              # Low for consistency

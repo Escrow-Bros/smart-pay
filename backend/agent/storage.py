@@ -1,21 +1,23 @@
 """
 4Everland IPFS Storage Module
-Handles uploading images and files to IPFS via 4Everland
+Handles uploading images and files to IPFS via 4Everland with retry logic
 """
 import os
+import time
 import httpx
 from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()  # Loads from root .env
 
-def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg") -> Optional[str]:
+def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries: int = 3) -> Optional[str]:
     """
-    Upload image bytes to IPFS via 4Everland
+    Upload image bytes to IPFS via 4Everland with exponential backoff retry
     
     Args:
         image_bytes: Raw image bytes to upload
         filename: Name to give the file (default: proof.jpg)
+        max_retries: Maximum number of retry attempts (default: 3)
     
     Returns:
         Public IPFS URL if successful, None otherwise
@@ -45,28 +47,39 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg") -> Optional[
             region_name='us-west-1'  # 4Everland default region
         )
         
-        # Upload to 4Everland bucket
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key=filename,
-            Body=image_bytes,
-            ContentType='image/jpeg'
-        )
+        # Retry logic with exponential backoff
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                # Upload to 4Everland bucket
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key=filename,
+                    Body=image_bytes,
+                    ContentType='image/jpeg'
+                )
+                
+                # Generate public IPFS URL
+                endpoint_clean = endpoint.rstrip('/')
+                public_url = f"{endpoint_clean}/{bucket_name}/{filename}"
+                
+                print(f"✅ Successfully uploaded to IPFS: {public_url}" + (f" (attempt {attempt + 1}/{max_retries})" if attempt > 0 else ""))
+                return public_url
+                
+            except ClientError as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                    print(f"⚠️ Upload attempt {attempt + 1} failed, retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Error uploading to 4Everland after {max_retries} attempts: {e}")
+                    return None
         
-        # Generate public IPFS URL
-        # 4Everland automatically pins to IPFS and provides gateway URL
-        # Fix: Remove trailing slash from endpoint to avoid double slash
-        endpoint_clean = endpoint.rstrip('/')
-        public_url = f"{endpoint_clean}/{bucket_name}/{filename}"
-        
-        print(f"✅ Successfully uploaded to IPFS: {public_url}")
-        return public_url
+        return None
         
     except ImportError:
         print("❌ Error: boto3 not installed. Run: pip install boto3")
-        return None
-    except ClientError as e:
-        print(f"❌ Error uploading to 4Everland: {e}")
         return None
     except Exception as e:
         print(f"❌ Unexpected error: {e}")

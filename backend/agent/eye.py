@@ -1,46 +1,19 @@
 """
 The Eye Agent - Universal AI-Powered Work Verification  
 Verifies ANY type of gig work by comparing before/after photos
-UPGRADED: Now with vision model support for actual image analysis!
+Uses modular AI client with GPT-4.1 (reasoning) and GPT-4o (vision)
 """
 import asyncio
 import json
 import os
 import base64
-import httpx
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
 from backend.agent.gps_verifier import verify_gps_location
+from backend.agent.paralegal import AIClient, get_ai_client
+from backend.agent.config import AgentConfig
 
-# Monkey-patch httpx to avoid Sudo AI blocking OpenAI SDK headers
-import httpx
-_original_request_init = httpx.Request.__init__
-
-def _patched_request_init(self, *args, **kwargs):
-    _original_request_init(self, *args, **kwargs)
-    headers_to_remove = []
-    headers_to_modify = {}
-    
-    for name in self.headers.keys():
-        name_lower = name.lower()
-        if 'stainless' in name_lower:
-            headers_to_remove.append(name)
-        elif name_lower == 'user-agent' and 'openai' in self.headers[name].lower():
-            headers_to_modify[name] = 'python-requests/2.32.5'
-    
-    for name in headers_to_remove:
-        del self.headers[name]
-    for name, value in headers_to_modify.items():
-        self.headers[name] = value
-
-httpx.Request.__init__ = _patched_request_init
-
-# Now import SpoonOS
-from spoon_ai.llm import LLMManager, ConfigurationManager
-from spoon_ai.schema import Message
-
-load_dotenv()  # Loads from root .env
+load_dotenv()
 
 
 class UniversalEyeAgent:
@@ -51,27 +24,15 @@ class UniversalEyeAgent:
     1. Paralegal generates verification plan at job creation (TASK-011)
     2. Eye uses that plan to verify worker's proof (TASK-013)
     
-    Uses SpoonOS (spoon_ai SDK) for:
-    - Configuration management
-    - Text-based analysis
-    - Fallback mechanisms
-    
-    Uses direct OpenAI client for:
-    - Vision model calls (GPT-4V)
-    - Image analysis (SpoonOS Message doesn't support structured image content yet)
+    Uses modular AI client for:
+    - Text reasoning: GPT-4.1 (decision making, scoring logic)
+    - Vision analysis: GPT-4o (image comparison, quality assessment)
+    - All via Sudo AI unified proxy
     """
     
     def __init__(self):
-        # SpoonOS configuration and manager
-        self.config = ConfigurationManager()
-        self.llm = LLMManager(self.config)
-        
-        # Direct OpenAI client for vision (required for image inputs)
-        # Note: SpoonOS Message objects only support text content currently
-        self.vision_client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL")
-        )
+        # Get shared AI client (supports both text and vision)
+        self.ai_client = get_ai_client()
     
     async def verify(
         self,
@@ -363,22 +324,16 @@ BEFORE PHOTOS (Reference):"""
 }"""
             })
             
-            # Call vision model using SpoonOS-configured client
-            print("👁️ Analyzing images with vision model (via SpoonOS)...")
-            response = await self.vision_client.chat.completions.create(
-                model="gpt-4o",  # Vision model
-                messages=[
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.1
+            # Call vision model for image comparison
+            print("👁️ Analyzing images with GPT-4o vision model...")
+            response_text = await self.ai_client.analyze_multi_image(
+                content=content,
+                model=AgentConfig.VISION_MODEL,
+                max_tokens=1000
             )
             
             # Parse JSON response
-            comparison = self._parse_json_response(response.choices[0].message.content)
+            comparison = self._parse_json_response(response_text)
             
             # Add GPS verification result to comparison
             if gps_verification:
@@ -507,21 +462,15 @@ Return ONLY valid JSON:
 }"""
             })
             
-            # Call vision model using SpoonOS-configured client
-            print("👁️ Verifying work quality with vision model (via SpoonOS)...")
-            response = await self.vision_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                ],
-                max_tokens=800,
-                temperature=0.1
+            # Call vision model for work quality verification
+            print("👁️ Verifying work quality with GPT-4o vision model...")
+            response_text = await self.ai_client.analyze_multi_image(
+                content=content,
+                model=AgentConfig.VISION_MODEL,
+                max_tokens=800
             )
             
-            verification = self._parse_json_response(response.choices[0].message.content)
+            verification = self._parse_json_response(response_text)
             
             print(f"✅ Verification complete - Verdict: {verification.get('verdict', 'unknown')}")
             

@@ -1,6 +1,6 @@
 # Core Neo N3 Blockchain Dependencies
 neo-mamba==3.1.0
-# neo3-boa==1.4.1  # REMOVED - Only needed for contract development, not runtime
+neo3-boa==1.4.1
 neo3crypto==0.4.4
 base58==2.1.1
 bitarray==2.9.2
@@ -28,9 +28,8 @@ pydantic-settings==2.6.1
 pydantic_core==2.33.2
 python-multipart>=0.0.9
 
-# AI Agents
-spoon-ai-sdk>=0.3.0
-openai==1.99.9
+# AI Agents (via Sudo AI native SDK - production-ready)
+sudo-ai>=0.1.0
 python-dotenv>=1.0.0
 
 # AWS/Storage (for IPFS and image storage)

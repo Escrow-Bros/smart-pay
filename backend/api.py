@@ -7,11 +7,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Dict
 import asyncio
 import json
 import os
+import time
+from collections import defaultdict
+from threading import Lock
 
 # Internal imports
 from backend.database import get_db
@@ -23,26 +26,107 @@ from src.neo_mcp import NeoMCP
 from scripts.check_balances import get_gas_balance
 
 
-# ==================== MODELS ====================
+# ==================== RATE LIMITING ====================
+
+class RateLimiter:
+    """Simple in-memory rate limiter"""
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = defaultdict(list)
+        self.lock = Lock()
+    
+    def is_allowed(self, identifier: str) -> bool:
+        """Check if request is allowed for given identifier (IP/wallet)"""
+        with self.lock:
+            now = time.time()
+            # Clean old requests
+            self.requests[identifier] = [
+                req_time for req_time in self.requests[identifier]
+                if now - req_time < self.window_seconds
+            ]
+            # Check limit
+            if len(self.requests[identifier]) >= self.max_requests:
+                return False
+            # Record request
+            self.requests[identifier].append(now)
+            return True
+
+rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
+
+# ==================== VALIDATION MODELS ====================
 
 class CreateJobRequest(BaseModel):
-    client_address: str
-    description: str
-    location: str = ""
-    latitude: float = 0.0
-    longitude: float = 0.0
-    reference_photos: List[str]  # IPFS URLs
-    verification_plan: dict
-    amount: float
+    client_address: str = Field(..., min_length=34, max_length=34, description="Neo N3 address (34 chars starting with N)")
+    description: str = Field(..., min_length=10, max_length=5000, description="Job description (10-5000 chars)")
+    location: str = Field("", max_length=500)
+    latitude: float = Field(0.0, ge=-90, le=90)
+    longitude: float = Field(0.0, ge=-180, le=180)
+    reference_photos: List[str] = Field(..., min_items=1, max_items=10, description="IPFS URLs")
+    verification_plan: dict = Field(...)
+    amount: float = Field(..., gt=0, le=10000, description="Payment amount in GAS (0-10000)")
+    
+    @field_validator('client_address')
+    @classmethod
+    def validate_neo_address(cls, v):
+        if not v.startswith('N'):
+            raise ValueError('Neo N3 address must start with N')
+        return v
+    
+    @field_validator('reference_photos')
+    @classmethod
+    def validate_ipfs_urls(cls, v):
+        for url in v:
+            if not url.startswith(('http://', 'https://')):
+                raise ValueError(f'Invalid IPFS URL: {url}')
+        return v
+    
+    @field_validator('verification_plan')
+    @classmethod
+    def validate_verification_plan(cls, v):
+        required = ['task_category']
+        for key in required:
+            if key not in v:
+                raise ValueError(f'Verification plan missing required field: {key}')
+        return v
 
 class AssignJobRequest(BaseModel):
-    job_id: int
-    worker_address: str
+    job_id: int = Field(..., gt=0, description="Job ID (positive integer)")
+    worker_address: str = Field(..., min_length=34, max_length=34, description="Worker's Neo N3 address")
+    
+    @field_validator('worker_address')
+    @classmethod
+    def validate_neo_address(cls, v):
+        if not v.startswith('N'):
+            raise ValueError('Neo N3 address must start with N')
+        return v
 
 class SubmitProofRequest(BaseModel):
-    job_id: int
-    proof_photos: List[str]  # IPFS URLs
-    worker_location: Optional[Dict[str, float]] = None  # {lat: float, lng: float, accuracy: float}
+    job_id: int = Field(..., gt=0)
+    proof_photos: List[str] = Field(..., min_items=1, max_items=10)
+    worker_location: Optional[Dict[str, float]] = Field(None, description="GPS coordinates")
+    
+    @field_validator('proof_photos')
+    @classmethod
+    def validate_ipfs_urls(cls, v):
+        for url in v:
+            if not url.startswith(('http://', 'https://')):
+                raise ValueError(f'Invalid IPFS URL: {url}')
+        return v
+    
+    @field_validator('worker_location')
+    @classmethod
+    def validate_gps(cls, v):
+        if v is not None:
+            required = ['lat', 'lng']
+            for key in required:
+                if key not in v:
+                    raise ValueError(f'Worker location missing {key}')
+            if not (-90 <= v['lat'] <= 90):
+                raise ValueError('Invalid latitude')
+            if not (-180 <= v['lng'] <= 180):
+                raise ValueError('Invalid longitude')
+        return v
 
 class ValidationResult(BaseModel):
     clarity_issues: List[str]
@@ -170,31 +254,34 @@ async def list_available_jobs():
     """Get all open jobs (filtered for worker public view)"""
     try:
         jobs = db.get_available_jobs()
-        # Filter sensitive data for public worker view
-        filtered_jobs = [db._filter_for_worker_view(job) for job in jobs]
         return {
             "success": True,
-            "count": len(filtered_jobs),
-            "jobs": filtered_jobs
+            "count": len(jobs),
+            "jobs": jobs
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error listing jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve available jobs")
 
 
 @app.get("/api/jobs/client/{address}")
 async def get_client_jobs(address: str):
     """Get all jobs created by a client (with full details for owner)"""
     try:
+        if not address.startswith('N') or len(address) != 34:
+            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
+        
         jobs = db.get_client_jobs(address)
-        # Filter to show summary verification only
-        filtered_jobs = [db._filter_for_client_view(job) for job in jobs]
         return {
             "success": True,
-            "count": len(filtered_jobs),
-            "jobs": filtered_jobs
+            "count": len(jobs),
+            "jobs": jobs
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error getting client jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve client jobs")
 
 
 
@@ -202,33 +289,48 @@ async def get_client_jobs(address: str):
 async def get_worker_active_jobs(worker_address: str):
     """Get all active jobs for a worker (LOCKED + DISPUTED)"""
     try:
+        if not worker_address.startswith('N') or len(worker_address) != 34:
+            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
+        
         jobs = db.get_worker_active_jobs(worker_address)
         return {"jobs": jobs}
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error getting worker active jobs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error getting worker active jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve worker jobs")
 
 
 @app.get("/api/jobs/worker/{worker_address}/history")
 async def get_worker_history(worker_address: str):
     """Get all completed jobs for a worker"""
     try:
+        if not worker_address.startswith('N') or len(worker_address) != 34:
+            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
+        
         jobs = db.get_worker_completed_jobs(worker_address)
         return {"jobs": jobs}
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error getting worker history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error getting worker history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve worker history")
 
 
 @app.get("/api/jobs/worker/{worker_address}/stats")
 async def get_worker_stats(worker_address: str):
     """Get worker statistics"""
     try:
+        if not worker_address.startswith('N') or len(worker_address) != 34:
+            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
+        
         stats = db.get_worker_stats(worker_address)
         return stats
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error getting worker stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error getting worker stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve worker statistics")
 
 
 @app.get("/api/jobs/{job_id}")
@@ -351,30 +453,19 @@ async def create_job(request: CreateJobRequest):
     Create new job: Database + Blockchain
     
     Flow:
-    1. Create on blockchain first
-    2. Insert into DB with tx_hash
+    1. Rate limit check
+    2. Validate input (Pydantic)
+    3. Create on blockchain first
+    4. Insert into DB with tx_hash
     """
     try:
-        print("\n📝 CREATE JOB REQUEST:")
-        print(f"   Client: {request.client_address}")
-        print(f"   Description: {request.description[:100]}...")
-        print(f"   Location: {request.location}")
-        print(f"   Coordinates: ({request.latitude}, {request.longitude})")
-        print(f"   Amount: {request.amount} GAS")
-        print(f"   Reference Photos: {len(request.reference_photos)} images")
+        # Rate limiting
+        if not rate_limiter.is_allowed(request.client_address):
+            raise HTTPException(status_code=429, detail="Too many requests. Please wait before creating another job.")
         
-        # STRICT VALIDATION: Ensure all verification fields are present
-        if not request.description or len(request.description.strip()) < 10:
-            raise HTTPException(status_code=400, detail="Job description is required and must be at least 10 characters.")
-            
-        if not request.reference_photos:
-            raise HTTPException(status_code=400, detail="At least one reference photo is required for verification.")
-            
-        if not request.verification_plan:
-            raise HTTPException(status_code=400, detail="Verification plan is required. Please ensure AI analysis completed successfully.")
+        print(f"\n📝 CREATE JOB REQUEST: Client: {request.client_address}, Amount: {request.amount} GAS")
         
         # Format details for on-chain storage (Description + Verification Plan)
-        # This ensures the Eye agent has all context on-chain
         full_details = request.description + "\n\n"
         
         vp = request.verification_plan
@@ -405,15 +496,13 @@ async def create_job(request: CreateJobRequest):
         job_id = result["job_id"]
         tx_hash = result["tx_hash"]
         
-        print(f"\n✅ Blockchain job created:")
-        print(f"   Job ID: {job_id} (Type: {type(job_id)})")
-        print(f"   TX Hash: {tx_hash}")
+        print(f"✅ Blockchain job created: Job ID: {job_id}, TX: {tx_hash}")
         
         # Step 2: Insert into database
         job = db.create_job(
             job_id=job_id,
             client_address=request.client_address,
-            description=request.description,  # Store original description in DB
+            description=request.description,
             reference_photos=request.reference_photos,
             amount=request.amount,
             tx_hash=tx_hash,
@@ -423,8 +512,7 @@ async def create_job(request: CreateJobRequest):
             verification_plan=request.verification_plan
         )
         
-        print(f"\n✅ Database job created successfully")
-        print(f"   Job Object: {job}")
+        print(f"✅ Database job created successfully")
         
         return {
             "success": True,
@@ -436,8 +524,8 @@ async def create_job(request: CreateJobRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"\n❌ Job creation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Job creation failed: {str(e)}")
+        print(f"❌ Job creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create job. Please try again.")
 
 
 # ==================== WORKER ASSIGNMENT ====================
@@ -448,11 +536,16 @@ async def assign_job(request: AssignJobRequest):
     Worker claims job (auto-assign, first-come-first-served)
     
     Flow:
-    1. Check if job is OPEN
-    2. Call blockchain to assign worker
-    3. Update DB status to LOCKED
+    1. Rate limit check
+    2. Check if job is OPEN
+    3. Call blockchain to assign worker
+    4. Update DB status to LOCKED
     """
     try:
+        # Rate limiting
+        if not rate_limiter.is_allowed(request.worker_address):
+            raise HTTPException(status_code=429, detail="Too many requests. Please wait before claiming another job.")
+        
         # Check job exists and is OPEN
         job = db.get_job(request.job_id)
         if not job:
@@ -482,7 +575,8 @@ async def assign_job(request: AssignJobRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Assignment failed: {str(e)}")
+        print(f"❌ Assignment error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to assign job. Please try again.")
 
 
 # ==================== PROOF SUBMISSION ====================
@@ -511,10 +605,11 @@ async def submit_proof(request: SubmitProofRequest):
     Submit proof and trigger AI verification
     
     Flow:
-    1. Update DB with proof photos
-    2. Call Eye Agent for verification
-    3. If approved: Release funds on blockchain
-    4. Update DB status
+    1. Rate limit check
+    2. Update DB with proof photos
+    3. Call Eye Agent for verification
+    4. If approved: Release funds on blockchain
+    5. Update DB status
     
     Workers can resubmit for DISPUTED jobs to attempt reverification.
     """
@@ -527,8 +622,15 @@ async def submit_proof(request: SubmitProofRequest):
         if job["status"] not in ["LOCKED", "DISPUTED"]:
             raise HTTPException(status_code=400, detail=f"Job is {job['status']}, cannot submit proof")
         
+        # Rate limiting (by worker address)
+        worker_addr = job.get("worker_address")
+        if worker_addr and not rate_limiter.is_allowed(worker_addr):
+            raise HTTPException(status_code=429, detail="Too many proof submissions. Please wait before trying again.")
+        
         # Update with proof photos
         db.submit_proof(request.job_id, request.proof_photos)
+        
+        print(f"🔍 Running Eye Agent verification for job #{request.job_id}...")
         
         # Run Eye Agent verification
         verification = await verify_work(
@@ -539,6 +641,7 @@ async def submit_proof(request: SubmitProofRequest):
         
         if verification.get("verified"):
             # Approved - Release funds
+            print(f"✅ Work approved for job #{request.job_id}, releasing funds...")
             release_result = await mcp.release_funds_on_chain(job_id=request.job_id)
             
             if release_result["success"]:
@@ -557,9 +660,10 @@ async def submit_proof(request: SubmitProofRequest):
                     "tx_hash": release_result["tx_hash"]
                 }
             else:
-                raise HTTPException(status_code=500, detail="Payment release failed")
+                raise HTTPException(status_code=500, detail="Work approved but payment release failed. Please contact support.")
         else:
             # Rejected - Mark as disputed or allow retry
+            print(f"❌ Work rejected for job #{request.job_id}")
             job = db.dispute_job(
                 job_id=request.job_id,
                 reason=verification.get("reason", "Work did not meet requirements")
@@ -575,7 +679,8 @@ async def submit_proof(request: SubmitProofRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Submission failed: {str(e)}")
+        print(f"❌ Submission error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to submit proof. Please try again.")
 
 
 # ==================== EYE VERIFICATION (Direct Endpoint) ====================

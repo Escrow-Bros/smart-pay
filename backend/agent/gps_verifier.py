@@ -63,8 +63,6 @@ def verify_gps_location(
             "tier": str  # 'excellent', 'good', 'acceptable', 'failed'
         }
     """
-    print("reference_gps", reference_gps)
-    print("proof_gps", proof_gps)
     try:
         # Extract coordinates
         ref_lat = reference_gps.get("latitude")
@@ -73,8 +71,6 @@ def verify_gps_location(
         
         proof_lat = proof_gps.get("lat")
         proof_lon = proof_gps.get("lng")
-        print("proof_lat", proof_lat)
-        print("proof_lon", proof_lon)
         proof_accuracy = proof_gps.get("accuracy", 10)  # meters
         
         # Validate inputs
