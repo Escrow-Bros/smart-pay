@@ -22,6 +22,7 @@ from backend.agent.paralegal import analyze_job_request
 from backend.agent.eye import UniversalEyeAgent, verify_work
 from backend.agent.storage import upload_to_ipfs
 from backend.agent.banker import check_balance
+from backend.agent.conversational_job_creator import get_conversation_engine
 from src.neo_mcp import NeoMCP
 from scripts.check_balances import get_gas_balance
 
@@ -776,6 +777,88 @@ async def verify_work_endpoint(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+
+
+# ==================== CONVERSATIONAL JOB CREATION ====================
+
+@app.post("/api/chat/job-creation")
+async def chat_job_creation(
+    session_id: str = Form(...),
+    message: str = Form(...),
+    image_uploaded: bool = Form(False)
+):
+    """
+    Conversational AI endpoint for job creation.
+    Uses multi-turn dialogue to guide users through job posting.
+    
+    Args:
+        session_id: Unique conversation identifier (generate on frontend)
+        message: User's text input
+        image_uploaded: Whether user just uploaded a reference image
+    
+    Returns:
+        AI response with extracted data and next step guidance
+    """
+    try:
+        # Rate limiting check
+        if not rate_limiter.is_allowed(session_id):
+            raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
+        
+        # Get conversation engine
+        engine = get_conversation_engine()
+        
+        # Process message
+        response = await engine.process_message(
+            session_id=session_id,
+            user_message=message,
+            image_uploaded=image_uploaded
+        )
+        
+        return {
+            "success": True,
+            **response
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Chat processing failed")
+
+
+@app.get("/api/chat/session/{session_id}")
+async def get_chat_session(session_id: str):
+    """Get current state of a conversation session"""
+    try:
+        engine = get_conversation_engine()
+        state = engine.get_session_state(session_id)
+        
+        if not state:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {
+            "success": True,
+            "session": state
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve session: {str(e)}")
+
+
+@app.delete("/api/chat/session/{session_id}")
+async def clear_chat_session(session_id: str):
+    """Clear a conversation session"""
+    try:
+        engine = get_conversation_engine()
+        engine.clear_session(session_id)
+        
+        return {
+            "success": True,
+            "message": "Session cleared"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}")
 
 
 if __name__ == "__main__":

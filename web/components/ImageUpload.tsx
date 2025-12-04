@@ -16,27 +16,67 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
         const files = e.target.files;
         if (!files) return;
 
-        const MAX_SIZE_KB = 700;
-        const MAX_SIZE_BYTES = MAX_SIZE_KB * 1024;
-
         Array.from(files).forEach((file) => {
-            // Check file size
-            if (file.size > MAX_SIZE_BYTES) {
-                alert(`Image "${file.name}" is too large (${(file.size / 1024).toFixed(0)}KB). Please upload images smaller than ${MAX_SIZE_KB}KB.`);
-                return;
-            }
-
             // Check file type
             if (!file.type.startsWith('image/')) {
+                alert(`"${file.name}" is not an image file.`);
                 return;
             }
 
+            // Read and optimize ALL images
             const reader = new FileReader();
             reader.onloadend = () => {
-                onAdd({
-                    file,
-                    preview: reader.result as string,
-                });
+                const img = new Image();
+                img.onload = () => {
+                    // Resize if too large (max 1600x1600 for good quality vs token balance)
+                    const MAX_DIMENSION = 1600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                        if (width > height) {
+                            height = Math.round((height * MAX_DIMENSION) / width);
+                            width = MAX_DIMENSION;
+                        } else {
+                            width = Math.round((width * MAX_DIMENSION) / height);
+                            height = MAX_DIMENSION;
+                        }
+                    }
+
+                    // Create canvas and compress
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+
+                    // Compress to 85% quality JPEG
+                    canvas.toBlob(
+                        (blob) => {
+                            if (blob) {
+                                const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+                                    type: 'image/jpeg',
+                                });
+                                const preview = canvas.toDataURL('image/jpeg', 0.85);
+                                
+                                // Show size reduction if significant
+                                const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                                const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                                if (file.size > blob.size * 1.5) {
+                                    console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
+                                }
+                                
+                                onAdd({
+                                    file: optimizedFile,
+                                    preview,
+                                });
+                            }
+                        },
+                        'image/jpeg',
+                        0.85
+                    );
+                };
+                img.src = reader.result as string;
             };
             reader.readAsDataURL(file);
         });
@@ -87,12 +127,12 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         Drop reference images here or click to select
                     </p>
                     <p className="text-slate-600 text-xs mt-1">
-                        Supports JPG, PNG - Multiple files allowed
+                        Any size accepted • Auto-optimized for AI
                     </p>
                 </label>
             </div>
             <p className="text-sm text-gray-400 mt-2">
-                ⚠️ Max size: 700KB per image
+                💡 All images auto-resized to 1600px & compressed (85% quality) for optimal AI processing
             </p>
 
             {images.length > 0 && (
