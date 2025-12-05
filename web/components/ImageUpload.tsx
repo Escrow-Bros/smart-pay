@@ -132,7 +132,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                 </label>
             </div>
             <p className="text-xs sm:text-sm text-gray-400 mt-3 text-center">
-                💡 All images auto-resized to 1600px & compressed (85% quality) for optimal AI processing
+                All images auto-resized to 1600px & compressed (85% quality) for optimal AI processing
             </p>
 
             {images.length > 0 && (

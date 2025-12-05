@@ -5,13 +5,12 @@ Uses modular AI client with GPT-4.1 (reasoning) and GPT-4o (vision)
 """
 import asyncio
 import json
-import os
 import base64
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from backend.agent.gps_verifier import verify_gps_location
-from backend.agent.paralegal import AIClient, get_ai_client
-from backend.agent.config import AgentConfig
+from backend.agent.paralegal import get_ai_client
+from backend.config import AgentConfig
 
 load_dotenv()
 

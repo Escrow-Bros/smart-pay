@@ -2,17 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables
-env_paths = [
-    "agent/.env",           # From project root
-    ".env",                 # From agent directory
-    "../agent/.env"         # From parent directory
-]
-
-for env_path in env_paths:
-    if Path(env_path).exists():
-        load_dotenv(env_path)
-        break
+# Load environment variables - searches upward from current directory
+load_dotenv()
 
 
 class AgentConfig:
@@ -42,7 +33,7 @@ class AgentConfig:
     def validate(cls):
         """Validate that required configuration is present"""
         if not cls.SUDO_API_KEY:
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
+            raise ValueError("SUDO_API_KEY not found in environment variables")
         return True
 
 

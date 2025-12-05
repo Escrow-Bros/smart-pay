@@ -127,7 +127,7 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
             </div>
 
             <p className="text-xs sm:text-sm text-slate-500 mt-3 text-center">
-                💡 Start typing to search. Select from suggestions for precise coordinates.
+                Start typing to search. Select from suggestions for precise coordinates.
             </p>
         </div>
     );

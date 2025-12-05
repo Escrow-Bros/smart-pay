@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { User, Bot } from 'lucide-react';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
@@ -28,12 +29,12 @@ export default function ChatMessage({ role, content, timestamp }: ChatMessagePro
       )}>
         {/* Avatar */}
         <div className={cn(
-          'flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold',
+          'flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center',
           isUser 
             ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white'
             : 'bg-gradient-to-br from-purple-500 to-pink-600 text-white'
         )}>
-          {isUser ? '👤' : '🤖'}
+          {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
         </div>
 
         {/* Message Bubble */}

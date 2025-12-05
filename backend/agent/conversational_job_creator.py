@@ -6,7 +6,7 @@ Uses Sudo AI SDK with structured output for reliable conversation flow.
 import json
 from typing import Dict, List, Optional, Any
 from backend.agent.paralegal import get_ai_client
-from backend.agent.config import AgentConfig
+from backend.config import AgentConfig
 
 
 # ==================== CONVERSATION SCHEMAS ====================

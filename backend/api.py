@@ -63,7 +63,7 @@ class CreateJobRequest(BaseModel):
     location: str = Field("", max_length=500)
     latitude: float = Field(0.0, ge=-90, le=90)
     longitude: float = Field(0.0, ge=-180, le=180)
-    reference_photos: List[str] = Field(..., min_items=1, max_items=10, description="IPFS URLs")
+    reference_photos: List[str] = Field(..., min_length=1, max_length=10, description="IPFS URLs")
     verification_plan: dict = Field(...)
     amount: float = Field(..., gt=0, le=10000, description="Payment amount in GAS (0-10000)")
     
@@ -104,7 +104,7 @@ class AssignJobRequest(BaseModel):
 
 class SubmitProofRequest(BaseModel):
     job_id: int = Field(..., gt=0)
-    proof_photos: List[str] = Field(..., min_items=1, max_items=10)
+    proof_photos: List[str] = Field(..., min_length=1, max_length=10)
     worker_location: Optional[Dict[str, float]] = Field(None, description="GPS coordinates")
     
     @field_validator('proof_photos')

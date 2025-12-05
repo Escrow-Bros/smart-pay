@@ -9,7 +9,7 @@ import base64
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from sudo_ai import Sudo
-from backend.agent.config import AgentConfig
+from backend.config import AgentConfig
 
 load_dotenv()
 
