@@ -4,9 +4,37 @@ Multi-turn dialogue system for natural job creation through chat.
 Uses Sudo AI SDK with structured output for reliable conversation flow.
 """
 import json
+import re
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from backend.agent.paralegal import get_ai_client
 from backend.config import AgentConfig
+
+
+def clean_json_response(text: str) -> str:
+    """
+    Attempt to clean and fix common JSON formatting issues from AI responses.
+    
+    Common issues:
+    - Markdown code blocks (```json ... ```)
+    - Unterminated strings
+    - Extra text before/after JSON
+    - Unescaped quotes in strings
+    """
+    # Remove markdown code blocks
+    text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
+    
+    # Try to extract just the JSON object/array
+    # Look for content between outermost { } or [ ]
+    json_match = re.search(r'(\{[\s\S]*\})', text)
+    if json_match:
+        text = json_match.group(1)
+    
+    # Strip whitespace
+    text = text.strip()
+    
+    return text
 
 
 # ==================== CONVERSATION SCHEMAS ====================
@@ -162,11 +190,61 @@ class ConversationalJobCreator:
     def __init__(self):
         self.ai_client = get_ai_client()
         self.sessions: Dict[str, ConversationState] = {}
+        
+        # Create sessions directory for persistence
+        self.sessions_dir = Path(__file__).parent.parent / ".sessions"
+        self.sessions_dir.mkdir(exist_ok=True)
+        print(f"[ConvJobCreator] Session persistence enabled: {self.sessions_dir}")
+    
+    def _session_file_path(self, session_id: str) -> Path:
+        """Get file path for session persistence"""
+        return self.sessions_dir / f"{session_id}.json"
+    
+    def _save_session(self, state: ConversationState):
+        """Save session state to disk"""
+        try:
+            session_file = self._session_file_path(state.session_id)
+            with open(session_file, 'w') as f:
+                json.dump(state.to_dict(), f, indent=2)
+            print(f"[ConvJobCreator] Session saved: {state.session_id}")
+        except Exception as e:
+            print(f"[ConvJobCreator] Failed to save session: {e}")
+    
+    def _load_session(self, session_id: str) -> Optional[ConversationState]:
+        """Load session state from disk"""
+        try:
+            session_file = self._session_file_path(session_id)
+            if not session_file.exists():
+                return None
+            
+            with open(session_file, 'r') as f:
+                data = json.load(f)
+            
+            # Reconstruct ConversationState from saved data
+            state = ConversationState(session_id)
+            state.extracted_data = data['extracted_data']
+            state.verification_requirements = data['verification_requirements']
+            state.current_step = data['current_step']
+            state.is_complete = data['is_complete']
+            state.history = data['history']
+            
+            print(f"[ConvJobCreator] Session loaded from disk: {session_id} ({len(state.history)} messages)")
+            return state
+        except Exception as e:
+            print(f"[ConvJobCreator] Failed to load session: {e}")
+            return None
     
     def get_or_create_session(self, session_id: str) -> ConversationState:
-        """Get existing session or create new one"""
+        """Get existing session or create new one (with disk persistence)"""
+        # Check memory first
         if session_id not in self.sessions:
-            self.sessions[session_id] = ConversationState(session_id)
+            # Try loading from disk
+            loaded_state = self._load_session(session_id)
+            if loaded_state:
+                self.sessions[session_id] = loaded_state
+            else:
+                # Create new session
+                self.sessions[session_id] = ConversationState(session_id)
         return self.sessions[session_id]
     
     async def process_message(
@@ -195,6 +273,12 @@ class ConversationalJobCreator:
         # Add user message to history
         state.add_message("user", user_message)
         
+        print(f"[ConvJobCreator] Processing message for session {session_id}")
+        print(f"   User message: {user_message[:100]}{'...' if len(user_message) > 100 else ''}")
+        print(f"   Current step: {state.current_step}")
+        print(f"   Image uploaded: {image_uploaded}")
+        print(f"   Has image in state: {state.extracted_data.get('has_image', False)}")
+        
         # Build context for AI
         context = self._build_conversation_context(state, user_message)
         
@@ -209,6 +293,7 @@ class ConversationalJobCreator:
                 }
             }
             
+            print(f"[ConvJobCreator] Calling AI with context length: {len(context)} chars")
             response_text = await self.ai_client.generate_text(
                 context,
                 model=AgentConfig.TEXT_MODEL,
@@ -217,16 +302,49 @@ class ConversationalJobCreator:
                 response_format=response_format
             )
             
-            response_data = json.loads(response_text)
+            print(f"[ConvJobCreator] Raw AI response ({len(response_text)} chars):")
+            print(f"--- START RAW RESPONSE ---")
+            print(response_text)
+            print(f"--- END RAW RESPONSE ---")
+            
+            # Try to clean the JSON response
+            cleaned_text = clean_json_response(response_text)
+            if cleaned_text != response_text:
+                print(f"[ConvJobCreator] Cleaned JSON (removed markdown/whitespace)")
+                print(f"--- START CLEANED ---")
+                print(cleaned_text)
+                print(f"--- END CLEANED ---")
+            
+            response_data = json.loads(cleaned_text)
             
             # Update state with extracted data
             state.update_extracted_data(response_data["extracted_data"])
+            
+            # CRITICAL: If image was uploaded this turn, ensure has_image stays True
+            # (AI doesn't know about image upload in this same turn)
+            if image_uploaded:
+                state.extracted_data["has_image"] = True
+                print(f"[ConvJobCreator] Image uploaded this turn - ensuring has_image=True")
+            
             state.update_verification_requirements(response_data["verification_requirements"])
             state.current_step = response_data["current_step"]
-            state.is_complete = response_data["is_complete"]
+            
+            # Recalculate is_complete based on actual missing fields
+            # (AI might not know image was just uploaded or location was just provided)
+            missing_fields = state.get_missing_fields()
+            state.is_complete = len(missing_fields) == 0
+            
+            if state.is_complete and not response_data["is_complete"]:
+                print(f"[ConvJobCreator] ✅ All fields collected! Overriding AI's is_complete to True")
+            elif response_data["is_complete"] and not state.is_complete:
+                print(f"[ConvJobCreator] ⚠️ AI said complete but missing: {missing_fields}")
+                state.is_complete = False  # Trust our validation over AI
             
             # Add AI response to history
             state.add_message("assistant", response_data["ai_message"])
+            
+            # Save session to disk
+            self._save_session(state)
             
             # Add current state info to response
             response_data["session_state"] = {
@@ -238,8 +356,84 @@ class ConversationalJobCreator:
             
             return response_data
             
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON Decode Error: {str(e)}")
+            print(f"   Error at line {e.lineno}, column {e.colno}")
+            print(f"   Error position in string: char {e.pos}")
+            if 'cleaned_text' in locals():
+                print(f"   Full cleaned text length: {len(cleaned_text)} chars")
+                print(f"   Problematic area (chars {max(0, e.pos-100)}:{min(len(cleaned_text), e.pos+100)}):")
+                print(f"   ...{cleaned_text[max(0, e.pos-100):min(len(cleaned_text), e.pos+100)]}...")
+                print(f"   Last 200 chars of response:")
+                print(f"   ...{cleaned_text[-200:]}")
+            
+            # Try one more time with a simpler prompt (no structured output)
+            print(f"[ConvJobCreator] Retrying with simpler prompt...")
+            try:
+                simple_prompt = f"""You are helping create a job posting. Respond naturally.
+
+Current state:
+- Task: {state.extracted_data.get('task', 'Not specified')}
+- Location: {state.extracted_data.get('location', 'Not specified')}
+- Price: {state.extracted_data.get('price_amount', 'Not specified')} {state.extracted_data.get('price_currency', '')}
+- Has image: {state.extracted_data.get('has_image', False)}
+
+User message: {user_message}
+
+Respond with helpful guidance. What should you ask next?"""
+                
+                simple_response = await self.ai_client.generate_text(
+                    simple_prompt,
+                    model=AgentConfig.TEXT_MODEL,
+                    temperature=0.7,
+                    max_tokens=200
+                )
+                
+                print(f"[ConvJobCreator] Simple response: {simple_response}")
+                
+                fallback = {
+                    "ai_message": simple_response,
+                    "extracted_data": state.extracted_data,
+                    "verification_requirements": state.verification_requirements,
+                    "missing_fields": state.get_missing_fields(),
+                    "current_step": state.current_step,
+                    "is_complete": False,
+                    "clarifying_questions": [],
+                    "session_state": {
+                        "extracted_data": state.extracted_data,
+                        "verification_requirements": state.verification_requirements,
+                        "missing_fields": state.get_missing_fields(),
+                        "is_complete": False
+                    }
+                }
+                state.add_message("assistant", fallback["ai_message"])
+                self._save_session(state)
+                return fallback
+            except Exception as retry_error:
+                print(f"[ConvJobCreator] Retry also failed: {retry_error}")
+                # Ultimate fallback
+                fallback = {
+                    "ai_message": "I'm having trouble processing that. Could you rephrase or try a simpler description?",
+                    "extracted_data": state.extracted_data,
+                    "verification_requirements": state.verification_requirements,
+                    "missing_fields": state.get_missing_fields(),
+                    "current_step": state.current_step,
+                    "is_complete": False,
+                    "clarifying_questions": [],
+                    "session_state": {
+                        "extracted_data": state.extracted_data,
+                        "verification_requirements": state.verification_requirements,
+                        "missing_fields": state.get_missing_fields(),
+                        "is_complete": False
+                    }
+                }
+                state.add_message("assistant", fallback["ai_message"])
+                return fallback
         except Exception as e:
-            print(f"❌ Conversation error: {str(e)}")
+            print(f"❌ Conversation error: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(f"   Traceback:")
+            traceback.print_exc()
             # Fallback response
             fallback = {
                 "ai_message": "I'm having trouble processing that. Could you rephrase?",
@@ -257,6 +451,7 @@ class ConversationalJobCreator:
                 }
             }
             state.add_message("assistant", fallback["ai_message"])
+            self._save_session(state)
             return fallback
     
     def _build_conversation_context(self, state: ConversationState, user_message: str) -> str:
@@ -399,9 +594,18 @@ Be natural, helpful, and SMART about what evidence is actually needed!"""
         return None
     
     def clear_session(self, session_id: str):
-        """Clear a conversation session"""
+        """Clear a conversation session from memory and disk"""
         if session_id in self.sessions:
             del self.sessions[session_id]
+        
+        # Also remove from disk
+        try:
+            session_file = self._session_file_path(session_id)
+            if session_file.exists():
+                session_file.unlink()
+                print(f"[ConvJobCreator] Session deleted: {session_id}")
+        except Exception as e:
+            print(f"[ConvJobCreator] Failed to delete session file: {e}")
 
 
 # Global instance

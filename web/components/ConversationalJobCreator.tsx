@@ -29,7 +29,23 @@ interface ExtractedData {
 export default function ConversationalJobCreator() {
   const { state, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages } = useApp();
   
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  // Get or create session ID from localStorage
+  const [sessionId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('job_creator_session_id');
+      if (stored) {
+        console.log('[JobCreator] Restoring session:', stored);
+        return stored;
+      }
+    }
+    const newId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('job_creator_session_id', newId);
+      console.log('[JobCreator] Created new session:', newId);
+    }
+    return newId;
+  });
+  
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -39,6 +55,7 @@ export default function ConversationalJobCreator() {
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false); // Only show if actually restoring
   const [extractedData, setExtractedData] = useState<ExtractedData>({
     task: null,
     task_description: null,
@@ -53,12 +70,69 @@ export default function ConversationalJobCreator() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
+  // Restore session from backend on mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      // Check if we have a stored session that might need restoration
+      const hasStoredSession = typeof window !== 'undefined' && localStorage.getItem('job_creator_session_id');
+      
+      if (!hasStoredSession) {
+        console.log('[JobCreator] No stored session, skipping restoration');
+        return;
+      }
+      
+      setIsRestoring(true);
+      
+      try {
+        console.log('[JobCreator] Attempting to restore session:', sessionId);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.session && data.session.history && data.session.history.length > 0) {
+            console.log('[JobCreator] Session restored:', data.session);
+            
+            // Restore messages from history
+            const restoredMessages: Message[] = data.session.history.map((msg: any, idx: number) => ({
+              id: `restored_${idx}_${Date.now()}`,
+              role: msg.role,
+              content: msg.content,
+              timestamp: new Date()
+            }));
+            setMessages(restoredMessages);
+            console.log('[JobCreator] Restored', restoredMessages.length, 'messages');
+            
+            // Restore extracted data
+            if (data.session.extracted_data) {
+              setExtractedData(data.session.extracted_data);
+            }
+            
+            // Restore completion state
+            if (data.session.is_complete !== undefined) {
+              setIsComplete(data.session.is_complete);
+            }
+          } else {
+            console.log('[JobCreator] Session exists but has no messages, showing default greeting');
+          }
+        } else if (response.status === 404) {
+          console.log('[JobCreator] No existing session found on server, starting fresh');
+        }
+      } catch (error) {
+        console.error('[JobCreator] Failed to restore session:', error);
+      } finally {
+        setIsRestoring(false);
+      }
+    };
+    
+    restoreSession();
+  }, [sessionId]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = async (userMessage: string) => {
+  const handleSendMessage = async (userMessage: string, forceImageUploaded: boolean = false) => {
     if (isLoading) return;
 
     // Add user message to chat with unique ID
@@ -76,7 +150,10 @@ export default function ConversationalJobCreator() {
       const formData = new FormData();
       formData.append('session_id', sessionId);
       formData.append('message', userMessage);
-      formData.append('image_uploaded', String(state.clientUploadedImages.length > 0 && !extractedData.has_image));
+      // Use forceImageUploaded flag if provided, otherwise check state
+      const imageUploaded = forceImageUploaded || (state.clientUploadedImages.length > 0 && !extractedData.has_image);
+      formData.append('image_uploaded', String(imageUploaded));
+      console.log('[JobCreator] Sending image_uploaded:', imageUploaded);
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/job-creation`, {
         method: 'POST',
@@ -124,10 +201,17 @@ export default function ConversationalJobCreator() {
   };
 
   const handleImageUpload = (image: UploadedImage) => {
+    console.log('[JobCreator] handleImageUpload called with:', image.file.name, 'Size:', (image.file.size / (1024 * 1024)).toFixed(2), 'MB');
+    console.log('[JobCreator] Current images count before add:', state.clientUploadedImages.length);
     addUploadedImage(image);
+    console.log('[JobCreator] addUploadedImage called, new count should be:', state.clientUploadedImages.length + 1);
+    
+    // Update extracted data immediately to reflect image upload
+    setExtractedData(prev => ({ ...prev, has_image: true }));
     
     // Send notification to backend (handleSendMessage will add the chat message)
-    handleSendMessage('[User uploaded reference image]');
+    console.log('[JobCreator] Sending notification to backend about uploaded image');
+    handleSendMessage('[User uploaded reference image]', true); // Pass true to indicate image was just uploaded
   };
 
   const handleLocationChange = (address: string, lat: number, lng: number) => {
@@ -158,11 +242,25 @@ export default function ConversationalJobCreator() {
       }
 
       // Upload images to IPFS
+      console.log('[JobCreator] Starting IPFS upload for', state.clientUploadedImages.length, 'images');
+      state.clientUploadedImages.forEach((img, idx) => {
+        console.log(`[JobCreator] Image ${idx + 1}:`, img.file.name, 'Size:', (img.file.size / (1024 * 1024)).toFixed(2), 'MB');
+      });
+      
       const ipfsUrls = await Promise.all(
-        state.clientUploadedImages.map(async (img) => {
-          return await apiClient.uploadToIpfs(img.file);
+        state.clientUploadedImages.map(async (img, idx) => {
+          console.log(`[JobCreator] Uploading image ${idx + 1}/${state.clientUploadedImages.length} to IPFS:`, img.file.name);
+          try {
+            const url = await apiClient.uploadToIpfs(img.file);
+            console.log(`[JobCreator] ✅ Image ${idx + 1} uploaded successfully:`, url);
+            return url;
+          } catch (error) {
+            console.error(`[JobCreator] ❌ Failed to upload image ${idx + 1}:`, error);
+            throw error;
+          }
         })
       );
+      console.log('[JobCreator] All IPFS uploads complete:', ipfsUrls);
 
       // Create job
       const payload = {
@@ -195,6 +293,12 @@ export default function ConversationalJobCreator() {
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`, {
           method: 'DELETE'
         });
+        
+        // Clear localStorage session
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('job_creator_session_id');
+          console.log('[JobCreator] Session cleared from localStorage');
+        }
         
         // Reset
         clearUploadedImages();
@@ -240,25 +344,40 @@ export default function ConversationalJobCreator() {
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4"
         >
-          {messages.map((msg) => (
-            <ChatMessage
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              timestamp={msg.timestamp}
-            />
-          ))}
-          
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-slate-800 rounded-2xl px-4 py-3 border border-slate-700">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          {isRestoring ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="flex gap-1 justify-center mb-3">
+                  <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
+                <p className="text-slate-400 text-sm">Restoring conversation...</p>
               </div>
             </div>
+          ) : (
+            <>
+              {messages.map((msg) => (
+                <ChatMessage
+                  key={msg.id}
+                  role={msg.role}
+                  content={msg.content}
+                  timestamp={msg.timestamp}
+                />
+              ))}
+              
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-800 rounded-2xl px-4 py-3 border border-slate-700">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
           
           <div ref={messagesEndRef} />
@@ -296,6 +415,18 @@ export default function ConversationalJobCreator() {
                 </span>
               )}
             </div>
+            
+            {/* Manual completion trigger if AI hasn't detected it yet */}
+            {!isComplete && extractedData.task && extractedData.location && extractedData.price_amount && state.clientUploadedImages.length > 0 && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setIsComplete(true)}
+                  className="w-full bg-gradient-to-r from-green-500 to-cyan-600 text-white font-semibold py-2.5 px-4 rounded-lg text-sm hover:shadow-lg hover:shadow-green-500/20 transition-all active:scale-95"
+                >
+                  ✓ All Info Collected - Proceed to Create Job
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -333,8 +464,8 @@ export default function ConversationalJobCreator() {
         {/* Chat Input */}
         <ChatInput
           onSend={handleSendMessage}
-          disabled={isLoading}
-          placeholder={isComplete ? "Need to change something?" : "Type your answer..."}
+          disabled={isLoading || isRestoring}
+          placeholder={isRestoring ? "Loading..." : isComplete ? "Need to change something?" : "Type your answer..."}
         />
       </div>
     </div>

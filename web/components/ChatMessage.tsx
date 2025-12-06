@@ -8,6 +8,24 @@ interface ChatMessageProps {
   timestamp?: Date;
 }
 
+// Simple markdown-to-HTML converter for chat messages
+function formatMessage(text: string): string {
+  return text
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    // Italic: *text* or _text_ (but not **text**)
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+    .replace(/_([^_]+?)_/g, '<em>$1</em>')
+    // Line breaks
+    .replace(/\n/g, '<br />')
+    // Numbered lists: 1. 2. 3. etc
+    .replace(/^(\d+)\.\s+(.+)$/gm, '<li class="ml-4">$2</li>')
+    // Wrap consecutive list items in <ol>
+    .replace(/(<li class="ml-4">.*<\/li>(\s*<br \/>)*)+/g, (match) => 
+      '<ol class="list-decimal ml-4 space-y-1">' + match.replace(/<br \/>/g, '') + '</ol>');
+}
+
 export default function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
   const isUser = role === 'user';
   const [formattedTime, setFormattedTime] = useState<string>('');
@@ -45,9 +63,9 @@ export default function ChatMessage({ role, content, timestamp }: ChatMessagePro
               ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white'
               : 'bg-slate-800 text-slate-100 border border-slate-700'
           )}>
-            <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words">
-              {content}
-            </p>
+            <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-strong:text-cyan-400 prose-strong:font-semibold"
+              dangerouslySetInnerHTML={{ __html: formatMessage(content) }}
+            />
           </div>
 
           {/* Timestamp */}

@@ -14,11 +14,15 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
+        console.log('[ImageUpload] File selection triggered:', files ? files.length : 0, 'files');
         if (!files) return;
 
         Array.from(files).forEach((file) => {
+            console.log('[ImageUpload] Processing file:', file.name, 'Type:', file.type, 'Size:', (file.size / (1024 * 1024)).toFixed(2), 'MB');
+            
             // Check file type
             if (!file.type.startsWith('image/')) {
+                console.error('[ImageUpload] Invalid file type:', file.type);
                 alert(`"${file.name}" is not an image file.`);
                 return;
             }
@@ -26,8 +30,10 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
             // Read and optimize ALL images
             const reader = new FileReader();
             reader.onloadend = () => {
+                console.log('[ImageUpload] File read complete for:', file.name);
                 const img = new Image();
                 img.onload = () => {
+                    console.log('[ImageUpload] Image loaded - Original dimensions:', img.width, 'x', img.height);
                     // Resize if too large (max 1600x1600 for good quality vs token balance)
                     const MAX_DIMENSION = 1600;
                     let width = img.width;
@@ -43,16 +49,23 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         }
                     }
 
+                    console.log('[ImageUpload] Resizing to:', width, 'x', height);
                     // Create canvas and compress
                     const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
-                    ctx?.drawImage(img, 0, 0, width, height);
+                    if (!ctx) {
+                        console.error('[ImageUpload] Failed to get canvas context');
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, width, height);
+                    console.log('[ImageUpload] Canvas created, starting compression...');
 
                     // Compress to 85% quality JPEG
                     canvas.toBlob(
                         (blob) => {
+                            console.log('[ImageUpload] Blob created:', blob ? (blob.size / (1024 * 1024)).toFixed(2) + ' MB' : 'null');
                             if (blob) {
                                 const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
                                     type: 'image/jpeg',
@@ -62,22 +75,32 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                                 // Show size reduction if significant
                                 const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
                                 const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                                console.log(`[ImageUpload] Size comparison - Original: ${originalSizeMB}MB, Optimized: ${optimizedSizeMB}MB`);
                                 if (file.size > blob.size * 1.5) {
                                     console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
                                 }
                                 
+                                console.log('[ImageUpload] Calling onAdd with optimized image:', optimizedFile.name);
                                 onAdd({
                                     file: optimizedFile,
                                     preview,
                                 });
+                                console.log('[ImageUpload] ✅ Image successfully added to state');
                             }
                         },
                         'image/jpeg',
                         0.85
                     );
                 };
+                img.onerror = (error) => {
+                    console.error('[ImageUpload] Image load error:', error);
+                };
                 img.src = reader.result as string;
             };
+            reader.onerror = (error) => {
+                console.error('[ImageUpload] FileReader error:', error);
+            };
+            console.log('[ImageUpload] Starting FileReader.readAsDataURL...');
             reader.readAsDataURL(file);
         });
 
@@ -127,7 +150,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         Drop reference images here or click to select
                     </p>
                     <p className="text-slate-600 text-xs text-center">
-                        Any size accepted • Auto-optimized for AI
+                        Auto-optimized for AI
                     </p>
                 </label>
             </div>
