@@ -79,8 +79,8 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
     };
 
     return (
-        <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+        <div className="w-full">
+            <label className="block text-sm sm:text-base font-medium text-slate-300 mb-3 text-center">
                 Job Location
             </label>
 
@@ -90,32 +90,32 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
                     type="text"
                     value={value}
                     onChange={handleInputChange}
-                    placeholder="Start typing an address (e.g., '123 Main St, San Francisco')..."
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600 text-sm"
+                    placeholder="Start typing an address..."
+                    className="w-full bg-slate-900/50 border border-slate-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-slate-200 text-sm sm:text-base focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-500 text-center touch-manipulation"
                     autoComplete="off"
                 />
 
                 {showSuggestions && suggestions.length > 0 && (
                     <div
                         ref={suggestionsRef}
-                        className="absolute z-50 mt-2 w-full bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-xl"
+                        className="absolute z-50 mt-2 w-full bg-slate-900 border border-slate-700 rounded-lg sm:rounded-xl overflow-hidden shadow-xl max-h-[60vh] overflow-y-auto"
                     >
                         {suggestions.slice(0, 5).map((prediction) => (
                             <div
                                 key={prediction.place_id}
                                 onClick={() => handleSelectLocation(prediction)}
-                                className="p-3 hover:bg-slate-800 cursor-pointer border-b border-slate-700 last:border-0 transition-colors flex items-start gap-2"
+                                className="p-2.5 sm:p-3 hover:bg-slate-800 cursor-pointer border-b border-slate-700 last:border-0 transition-colors flex items-start gap-2 touch-manipulation"
                             >
                                 <svg className="h-4 w-4 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                <div className="flex-1">
-                                    <div className="text-sm text-slate-200 font-medium">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs sm:text-sm text-slate-200 font-medium break-words">
                                         {prediction.structured_formatting.main_text}
                                     </div>
                                     {prediction.structured_formatting.secondary_text && (
-                                        <div className="text-xs text-slate-400 mt-0.5">
+                                        <div className="text-xs text-slate-400 mt-0.5 break-words">
                                             {prediction.structured_formatting.secondary_text}
                                         </div>
                                     )}
@@ -126,8 +126,8 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
                 )}
             </div>
 
-            <p className="text-xs text-slate-500 mt-2">
-                💡 Start typing to search for an address. Select from suggestions for precise coordinates.
+            <p className="text-xs sm:text-sm text-slate-500 mt-3 text-center">
+                Start typing to search. Select from suggestions for precise coordinates.
             </p>
         </div>
     );

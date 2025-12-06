@@ -101,15 +101,31 @@ export class ApiClient {
     }
 
     async uploadToIpfs(file: File): Promise<string> {
+        console.log('[API] uploadToIpfs called for file:', file.name, 'Size:', (file.size / (1024 * 1024)).toFixed(2), 'MB', 'Type:', file.type);
         const formData = new FormData();
         formData.append('file', file);
+        console.log('[API] FormData created, sending POST to', `${this.baseUrl}/api/ipfs/upload`);
 
-        const res = await fetch(`${this.baseUrl}/api/ipfs/upload`, {
-            method: 'POST',
-            body: formData,
-        });
-        const data = await res.json();
-        return data.url;
+        try {
+            const res = await fetch(`${this.baseUrl}/api/ipfs/upload`, {
+                method: 'POST',
+                body: formData,
+            });
+            console.log('[API] Response received, status:', res.status, res.statusText);
+            
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.error('[API] Upload failed with status', res.status, ':', errorText);
+                throw new Error(`Upload failed: ${res.status} ${errorText}`);
+            }
+            
+            const data = await res.json();
+            console.log('[API] ✅ IPFS upload successful:', data.url);
+            return data.url;
+        } catch (error) {
+            console.error('[API] ❌ IPFS upload error:', error);
+            throw error;
+        }
     }
 }
 

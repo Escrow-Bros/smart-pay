@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { GlobalState, UserMode, JobDict, WorkerStats, UploadedImage } from '@/lib/types';
 import { apiClient } from '@/lib/api';
+import { getGasUsdPrice } from '@/lib/currency';
 
 const CLIENT_ADDR = process.env.NEXT_PUBLIC_CLIENT_ADDR || '';
 const WORKER_ADDR = process.env.NEXT_PUBLIC_WORKER_ADDR || '';
@@ -186,6 +187,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
             fetchData();
         }
     }, [state.walletAddress, state.userMode, isInitialized]);
+
+    // Fetch GAS/USD price on mount and periodically
+    useEffect(() => {
+        // Initial fetch
+        getGasUsdPrice();
+        
+        // Refresh price every 5 minutes
+        const interval = setInterval(() => {
+            getGasUsdPrice();
+        }, 5 * 60 * 1000);
+        
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <AppContext.Provider

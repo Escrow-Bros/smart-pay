@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
+import { Briefcase, HardHat, BookOpen, ArrowRight } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function Home() {
               href="/how-it-works"
               className="inline-flex items-center gap-2 px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full text-sm font-medium transition-colors border border-slate-700 hover:border-slate-600"
             >
-              <span>📚</span> See How It Works
+              <BookOpen className="w-4 h-4" /> See How It Works
             </Link>
           </div>
         </div>
@@ -43,7 +44,9 @@ export default function Home() {
             onClick={() => handleSelectRole(true)}
             className="group relative bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border border-cyan-500/30 rounded-3xl p-8 hover:border-cyan-400 transition-all hover:shadow-xl hover:shadow-cyan-500/20"
           >
-            <div className="text-6xl mb-4">💼</div>
+            <div className="mb-4">
+              <Briefcase className="w-16 h-16 text-cyan-400 mx-auto" />
+            </div>
             <h2 className="text-2xl font-bold text-white mb-2">
               Login as Client
             </h2>
@@ -57,7 +60,7 @@ export default function Home() {
             </ul>
             <div className="mt-6 text-cyan-400 font-semibold flex items-center justify-center gap-2 group-hover:gap-3 transition-all">
               Get Started
-              <span>→</span>
+              <ArrowRight className="w-4 h-4" />
             </div>
           </button>
 
@@ -66,7 +69,9 @@ export default function Home() {
             onClick={() => handleSelectRole(false)}
             className="group relative bg-gradient-to-br from-green-500/10 to-emerald-600/10 border border-green-500/30 rounded-3xl p-8 hover:border-green-400 transition-all hover:shadow-xl hover:shadow-green-500/20"
           >
-            <div className="text-6xl mb-4">👷</div>
+            <div className="mb-4">
+              <HardHat className="w-16 h-16 text-green-400 mx-auto" />
+            </div>
             <h2 className="text-2xl font-bold text-white mb-2">
               Login as Gig Worker
             </h2>
@@ -80,7 +85,7 @@ export default function Home() {
             </ul>
             <div className="mt-6 text-green-400 font-semibold flex items-center justify-center gap-2 group-hover:gap-3 transition-all">
               Browse Jobs
-              <span>→</span>
+              <ArrowRight className="w-4 h-4" />
             </div>
           </button>
         </div>
