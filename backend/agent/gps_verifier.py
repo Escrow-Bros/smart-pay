@@ -51,7 +51,7 @@ def verify_gps_location(
     
     Args:
         reference_gps: {"latitude": float, "longitude": float, "accuracy": float}
-        proof_gps: {"latitude": float, "longitude": float, "accuracy": float}
+        proof_gps: {"lat": float, "lng": float, "accuracy": float}
         max_distance_meters: Maximum allowed distance (default 200 meters)
     
     Returns:

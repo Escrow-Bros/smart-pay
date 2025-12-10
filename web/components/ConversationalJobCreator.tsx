@@ -59,7 +59,7 @@ export default function ConversationalJobCreator() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = useCallback(async (userMessage: string) => {
+  const handleSendMessage = useCallback(async (userMessage: string, imageUploaded?: boolean) => {
     if (isLoading) {
       // Queue message for later if already processing
       pendingMessageRef.current = userMessage;
@@ -81,7 +81,11 @@ export default function ConversationalJobCreator() {
       const formData = new FormData();
       formData.append('session_id', sessionId);
       formData.append('message', userMessage);
-      formData.append('image_uploaded', String(state.clientUploadedImages.length > 0 && !extractedData.has_image));
+      // Use explicit parameter when provided, otherwise fall back to state check
+      const hasImageUploaded = imageUploaded !== undefined 
+        ? imageUploaded 
+        : (state.clientUploadedImages.length > 0 && !extractedData.has_image);
+      formData.append('image_uploaded', String(hasImageUploaded));
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/job-creation`, {
         method: 'POST',
@@ -141,7 +145,8 @@ export default function ConversationalJobCreator() {
     addUploadedImage(image);
     
     // Send notification to backend with natural language message
-    handleSendMessage('I uploaded a reference image');
+    // Pass true to avoid stale state closure
+    handleSendMessage('I uploaded a reference image', true);
   };
 
   const handleLocationChange = (address: string, lat: number, lng: number) => {

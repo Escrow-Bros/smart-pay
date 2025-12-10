@@ -172,6 +172,24 @@ class ConversationalJobCreator:
                 self.sessions[session_id] = ConversationState(session_id)
             return self.sessions[session_id]
     
+    def _build_fallback_response(self, state: ConversationState, message: str) -> Dict[str, Any]:
+        """Build fallback response for error cases"""
+        return {
+            "ai_message": message,
+            "extracted_data": state.extracted_data,
+            "verification_requirements": state.verification_requirements,
+            "missing_fields": state.get_missing_fields(),
+            "current_step": state.current_step,
+            "is_complete": False,
+            "clarifying_questions": [],
+            "session_state": {
+                "extracted_data": state.extracted_data,
+                "verification_requirements": state.verification_requirements,
+                "missing_fields": state.get_missing_fields(),
+                "is_complete": False
+            }
+        }
+    
     async def process_message(
         self,
         session_id: str,
@@ -244,41 +262,19 @@ class ConversationalJobCreator:
         except json.JSONDecodeError as e:
             print(f"❌ JSON parsing error: {e}")
             # Fallback response for malformed AI response
-            fallback = {
-                "ai_message": "I'm having trouble processing that. Could you rephrase?",
-                "extracted_data": state.extracted_data,
-                "verification_requirements": state.verification_requirements,
-                "missing_fields": state.get_missing_fields(),
-                "current_step": state.current_step,
-                "is_complete": False,
-                "clarifying_questions": [],
-                "session_state": {
-                    "extracted_data": state.extracted_data,
-                    "verification_requirements": state.verification_requirements,
-                    "missing_fields": state.get_missing_fields(),
-                    "is_complete": False
-                }
-            }
+            fallback = self._build_fallback_response(
+                state, 
+                "I'm having trouble processing that. Could you rephrase?"
+            )
             state.add_message("assistant", fallback["ai_message"])
             return fallback
         except Exception as e:
-            print(f"❌ Conversation error: {e!r}")
-            # Fallback response for general errors
-            fallback = {
-                "ai_message": "I'm having trouble processing that. Could you rephrase?",
-                "extracted_data": state.extracted_data,
-                "verification_requirements": state.verification_requirements,
-                "missing_fields": state.get_missing_fields(),
-                "current_step": state.current_step,
-                "is_complete": False,
-                "clarifying_questions": [],
-                "session_state": {
-                    "extracted_data": state.extracted_data,
-                    "verification_requirements": state.verification_requirements,
-                    "missing_fields": state.get_missing_fields(),
-                    "is_complete": False
-                }
-            }
+            print(f"❌ Conversation error: {e!r} (session: {session_id})")
+            # Fallback response for general errors with structured logging
+            fallback = self._build_fallback_response(
+                state,
+                "I'm having trouble processing that. Could you rephrase?"
+            )
             state.add_message("assistant", fallback["ai_message"])
             return fallback
     

@@ -22,7 +22,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
 
             // Read and optimize ALL images
             const reader = new FileReader();
-            reader.onloadend = () => {
+            reader.onload = () => {
                 const img = new Image();
                 img.onload = () => {
                     // Resize if too large (max 1600x1600 for good quality vs token balance)

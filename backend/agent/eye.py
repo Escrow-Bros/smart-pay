@@ -8,12 +8,9 @@ import json
 import base64
 import httpx
 from typing import List, Dict, Optional
-from dotenv import load_dotenv
 from backend.agent.gps_verifier import verify_gps_location
 from backend.agent.paralegal import get_ai_client
 from backend.config import AgentConfig
-
-load_dotenv()
 
 
 class UniversalEyeAgent:
@@ -48,7 +45,7 @@ class UniversalEyeAgent:
             job_id: Job identifier to fetch requirements from contract
             worker_id: Optional worker address for reputation checks
             worker_location: Optional worker GPS location from browser/app permissions
-                            {"latitude": float, "longitude": float, "accuracy": float}
+                            {"lat": float, "lng": float, "accuracy": float}
         
         Returns:
             Verification result with verdict and reasoning
@@ -152,7 +149,7 @@ class UniversalEyeAgent:
             proof_photos: List of proof photo URLs
             verification_plan: Verification plan from job_data
             job_location: Optional job GPS location from job_data {"latitude": float, "longitude": float, "accuracy": float}
-            worker_location: Optional worker GPS location from browser/app permissions {"latitude": float, "longitude": float, "accuracy": float}
+            worker_location: Optional worker GPS location from browser/app permissions {"lat": float, "lng": float, "accuracy": float}
         """
         
         print("📥 Downloading images for visual comparison...")
@@ -615,6 +612,7 @@ Return ONLY valid JSON:
         elif gps_tier == 'acceptable':
             gps_score = 15
         else:
+            print(f"⚠️ Unexpected GPS tier: {gps_tier}, using confidence-based scoring")
             gps_score = 25 * gps_confidence  # Fallback to confidence-based
         
         score += gps_score
@@ -1066,7 +1064,7 @@ async def verify_work(
         job_id: Job identifier from smart contract
         worker_id: Optional worker address
         worker_location: Optional worker GPS location from browser/app permissions
-                        {"latitude": float, "longitude": float, "accuracy": float}
+                        {"lat": float, "lng": float, "accuracy": float}
     
     Returns:
         Verification result:
@@ -1082,7 +1080,7 @@ async def verify_work(
         result = await verify_work(
             proof_photos=["ipfs://Qm.../after_wall.jpg"],
             job_id="job_12345",
-            worker_location={"latitude": 37.7749, "longitude": -122.4194, "accuracy": 10.0}
+            worker_location={"lat": 37.7749, "lng": -122.4194, "accuracy": 10.0}
         )
         
         if result["verified"]:

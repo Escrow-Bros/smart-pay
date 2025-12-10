@@ -1,5 +1,9 @@
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables at application entry point
+load_dotenv()
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -50,7 +54,6 @@ class RateLimiter:
             if not self.requests[identifier]:
                 del self.requests[identifier]
                 # Allow the request since no recent history
-                self.requests[identifier] = [now]
                 return True
             
             # Check limit
@@ -124,7 +127,10 @@ class AssignJobRequest(BaseModel):
 class SubmitProofRequest(BaseModel):
     job_id: int = Field(..., gt=0)
     proof_photos: List[str] = Field(..., min_length=1, max_length=10)
-    worker_location: Optional[Dict[str, float]] = Field(None, description="GPS coordinates")
+    worker_location: Optional[Dict[str, float]] = Field(
+        None, 
+        description="GPS coordinates with keys: 'lat' (latitude, -90 to 90), 'lng' (longitude, -180 to 180), 'accuracy' (meters)"
+    )
     
     @field_validator('proof_photos')
     @classmethod
@@ -520,7 +526,7 @@ async def create_job(request: CreateJobRequest):
             verification_plan=request.verification_plan
         )
         
-        print(f"✅ Database job created successfully")
+        print("✅ Database job created successfully")
         
         return {
             "success": True,
