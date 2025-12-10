@@ -5,7 +5,6 @@ Handles uploading images and files to IPFS via 4Everland with retry logic
 import os
 import time
 import httpx
-from io import BytesIO
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -34,75 +33,6 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
         print("Required: EVERLAND_BUCKET_NAME, EVERLAND_ACCESS_KEY, EVERLAND_SECRET_KEY")
         return None
     
-    # Try HTTP-based upload first (more reliable than boto3 for 4Everland)
-    try:
-        import requests
-        from datetime import datetime
-        import hmac
-        import hashlib
-        from urllib.parse import quote
-        
-        # Prepare the upload
-        file_size = len(image_bytes)
-        content_type = 'image/jpeg'
-        date = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
-        
-        # Build the URL
-        endpoint_clean = endpoint.rstrip('/')
-        url = f"{endpoint_clean}/{bucket_name}/{filename}"
-        
-        # Create AWS Signature Version 4 (simplified for PUT)
-        string_to_sign = f"PUT\n\n{content_type}\n{date}\n/{bucket_name}/{filename}"
-        signature = hmac.new(
-            secret_key.encode('utf-8'),
-            string_to_sign.encode('utf-8'),
-            hashlib.sha1
-        ).digest()
-        import base64
-        signature_b64 = base64.b64encode(signature).decode('utf-8')
-        
-        headers = {
-            'Content-Type': content_type,
-            'Content-Length': str(file_size),
-            'Date': date,
-            'Authorization': f'AWS {access_key}:{signature_b64}',
-            'x-amz-acl': 'public-read'
-        }
-        
-        print(f"[IPFS] Uploading via HTTP PUT to {url} ({file_size} bytes)")
-        
-        # Retry logic
-        last_error = None
-        for attempt in range(max_retries):
-            try:
-                response = requests.put(url, data=image_bytes, headers=headers, timeout=30)
-                
-                if response.status_code in [200, 201, 204]:
-                    print(f"✅ Successfully uploaded to IPFS ({file_size} bytes): {url}")
-                    return url
-                else:
-                    last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-                    if attempt < max_retries - 1:
-                        wait_time = (2 ** attempt)
-                        print(f"⚠️ Upload attempt {attempt + 1} failed ({response.status_code}), retrying in {wait_time}s...")
-                        time.sleep(wait_time)
-            except requests.exceptions.RequestException as e:
-                last_error = str(e)
-                if attempt < max_retries - 1:
-                    wait_time = (2 ** attempt)
-                    print(f"⚠️ Upload attempt {attempt + 1} failed ({e}), retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-        
-        print(f"❌ HTTP upload failed after {max_retries} attempts: {last_error}")
-        
-    except ImportError:
-        print("❌ Error: requests not installed. Run: pip install requests")
-        return None
-    except Exception as e:
-        print(f"❌ HTTP upload error: {e}")
-    
-    # Fallback to boto3 if HTTP fails
-    print("[IPFS] Trying boto3 fallback...")
     try:
         # 4Everland uses S3-compatible API
         import boto3
@@ -121,29 +51,19 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
         last_error = None
         for attempt in range(max_retries):
             try:
-                # Convert bytes to BytesIO for proper Content-Length handling
-                file_obj = BytesIO(image_bytes)
-                file_size = len(image_bytes)
-                
-                # Reset file pointer to beginning
-                file_obj.seek(0)
-                
-                # Upload to 4Everland bucket - boto3 should auto-calculate Content-Length from BytesIO
-                response = s3_client.put_object(
+                # Upload to 4Everland bucket
+                s3_client.put_object(
                     Bucket=bucket_name,
                     Key=filename,
-                    Body=file_obj,
-                    ContentType='image/jpeg',
-                    ContentEncoding='identity'  # Explicitly disable compression
+                    Body=image_bytes,
+                    ContentType='image/jpeg'
                 )
-                
-                print(f"[IPFS] Upload response: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
                 
                 # Generate public IPFS URL
                 endpoint_clean = endpoint.rstrip('/')
                 public_url = f"{endpoint_clean}/{bucket_name}/{filename}"
                 
-                print(f"✅ Successfully uploaded to IPFS ({file_size} bytes): {public_url}" + (f" (attempt {attempt + 1}/{max_retries})" if attempt > 0 else ""))
+                print(f"✅ Successfully uploaded to IPFS: {public_url}" + (f" (attempt {attempt + 1}/{max_retries})" if attempt > 0 else ""))
                 return public_url
                 
             except ClientError as e:

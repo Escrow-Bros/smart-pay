@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from 'react';
+import { useState, KeyboardEvent, useRef } from 'react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -12,11 +12,16 @@ export default function ChatInput({
   placeholder = 'Type your message...' 
 }: ChatInputProps) {
   const [input, setInput] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
     if (input.trim() && !disabled) {
       onSend(input.trim());
       setInput('');
+      // Reset textarea height after sending
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
     }
   };
 
@@ -30,6 +35,7 @@ export default function ChatInput({
   return (
     <div className="flex items-end gap-2 p-3 sm:p-4 bg-slate-900/50 border-t border-slate-800">
       <textarea
+        ref={textareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -51,6 +57,7 @@ export default function ChatInput({
       <button
         onClick={handleSend}
         disabled={!input.trim() || disabled}
+        aria-label="Send message"
         className="flex-shrink-0 bg-gradient-to-r from-cyan-500 to-blue-600 text-white p-2.5 sm:p-3 rounded-lg sm:rounded-xl hover:shadow-lg hover:shadow-cyan-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none min-h-[44px] min-w-[44px] touch-manipulation flex items-center justify-center"
       >
         <svg 

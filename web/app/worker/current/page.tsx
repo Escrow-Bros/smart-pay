@@ -225,10 +225,17 @@ export default function WorkerCurrentJobPage() {
                                     </span>
                                 </div>
                                 <div className="text-right">
-                                    <div className="flex items-baseline gap-1 justify-end">
-                                        <span className="text-green-400 font-bold text-2xl">{formatGasWithUSD(activeJob.amount).gas} GAS</span>
-                                    </div>
-                                    <div className="text-slate-500 text-sm">{formatGasWithUSD(activeJob.amount).usd}</div>
+                                    {(() => {
+                                        const { gas, usd } = formatGasWithUSD(activeJob.amount);
+                                        return (
+                                            <>
+                                                <div className="flex items-baseline gap-1 justify-end">
+                                                    <span className="text-green-400 font-bold text-2xl">{gas} GAS</span>
+                                                </div>
+                                                <div className="text-slate-500 text-sm">{usd}</div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 

@@ -11,8 +11,15 @@ export default function WorkerWalletPage() {
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await fetchData();
-        setTimeout(() => setIsRefreshing(false), 500);
+        try {
+            // Show spinner for minimum 300ms for UX feedback
+            await Promise.all([
+                fetchData(),
+                new Promise(resolve => setTimeout(resolve, 300))
+            ]);
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const handleCopyAddress = async () => {

@@ -14,6 +14,7 @@ const API_TIMEOUT = 5000; // 5 seconds
 
 let cachedGasPrice: number | null = null;
 let lastFetchTime: number = 0;
+let pendingFetch: Promise<number> | null = null;
 
 // ==================== PRICE FETCHING ====================
 
@@ -54,6 +55,7 @@ async function fetchGasPrice(): Promise<number> {
 /**
  * Get current GAS/USD price with caching
  * Uses 5-minute cache to avoid excessive API calls
+ * Deduplicates concurrent requests to prevent multiple API calls
  */
 export async function getGasUsdPrice(): Promise<number> {
   const now = Date.now();
@@ -63,8 +65,16 @@ export async function getGasUsdPrice(): Promise<number> {
     return cachedGasPrice;
   }
   
+  // Deduplicate concurrent requests
+  if (pendingFetch) {
+    return pendingFetch;
+  }
+  
   // Fetch new price
-  const price = await fetchGasPrice();
+  pendingFetch = fetchGasPrice();
+  const price = await pendingFetch;
+  pendingFetch = null;
+  
   cachedGasPrice = price;
   lastFetchTime = now;
   
@@ -103,7 +113,8 @@ export async function gasToUSDAsync(gasAmount: number): Promise<number> {
  * Use this for immediate conversions with last known price
  */
 export function usdToGas(usdAmount: number): number {
-  return usdAmount / getCachedGasPrice();
+  const price = getCachedGasPrice();
+  return price > 0 ? usdAmount / price : 0;
 }
 
 /**
@@ -112,7 +123,7 @@ export function usdToGas(usdAmount: number): number {
  */
 export async function usdToGasAsync(usdAmount: number): Promise<number> {
   const price = await getGasUsdPrice();
-  return usdAmount / price;
+  return price > 0 ? usdAmount / price : 0;
 }
 
 // ==================== FORMATTING ====================
@@ -177,17 +188,9 @@ export function formatPriceWithConversion(amount: number, currency: 'GAS' | 'USD
 
 /**
  * Initialize price cache
- * Call this when the app starts
+ * Call this explicitly when the app starts (e.g., in useEffect)
+ * Returns a Promise that resolves when cache is initialized
  */
 export async function initializePriceCache(): Promise<void> {
-  try {
-    await getGasUsdPrice();
-  } catch (error) {
-    console.warn('Failed to initialize price cache:', error);
-  }
-}
-
-// Auto-initialize in browser environment
-if (typeof window !== 'undefined') {
-  initializePriceCache();
+  await getGasUsdPrice();
 }

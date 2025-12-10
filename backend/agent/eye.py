@@ -6,6 +6,7 @@ Uses modular AI client with GPT-4.1 (reasoning) and GPT-4o (vision)
 import asyncio
 import json
 import base64
+import httpx
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from backend.agent.gps_verifier import verify_gps_location
@@ -187,14 +188,14 @@ class UniversalEyeAgent:
         if not worker_location:
             raise ValueError("Worker location is required for work verification. Please enable location services.")
         
-        print("📍 Verifying GPS location (REQUIRED - 50m radius)...")
+        print("📍 Verifying GPS location (REQUIRED - 300m radius)...")
         print("job_location", job_location)
         print("worker_location", worker_location)
         try:
             gps_verification = verify_gps_location(
                 reference_gps=job_location,
                 proof_gps=worker_location,
-                max_distance_meters=50.0
+                max_distance_meters=300.0
             )
             print(f"📍 GPS Result: {gps_verification['reasoning']}")
             
@@ -209,7 +210,7 @@ class UniversalEyeAgent:
                     "fraud_detected": True,
                     "visual_changes": [],
                     "gps_verification": gps_verification,
-                    "rejection_reason": f"Location check failed: {gps_verification['reasoning']}. Worker must be within 50m of job location.",
+                    "rejection_reason": f"Location check failed: {gps_verification['reasoning']}. Worker must be within 300m of job location.",
                     "distance_meters": gps_verification.get("distance_meters")
                 }
             
@@ -495,7 +496,7 @@ Return ONLY valid JSON:
         Two-Stage Verification System (Production-Grade)
         
         STAGE 1: Critical Checks (Must Pass)
-        - GPS within 500m (HARD FAIL if exceeded)
+        - GPS within 300m (HARD FAIL if exceeded - checked in compare_before_after)
         - Visible transformation (HARD FAIL if no work detected)
         
         STAGE 2: Quality Scoring (0-100 points)
@@ -521,7 +522,7 @@ Return ONLY valid JSON:
         # STAGE 1: CRITICAL CHECKS (Must Pass)
         # ===================================================================
         
-        # Critical Check 1: GPS - Must be within 500m (fraud detection)
+        # Critical Check 1: GPS - Must be within 300m (fraud detection)
         gps_check = comparison.get('gps_verification', {})
         distance = gps_check.get('distance_meters', 9999)
         
@@ -533,7 +534,7 @@ Return ONLY valid JSON:
                 "verified": False,
                 "confidence": 0.0,
                 "verdict": "REJECTED",
-                "reason": f"Worker not at job location ({distance_text} away - max 500m)",
+                "reason": f"Worker not at job location ({distance_text} away - max 300m)",
                 "category": "GPS_LOCATION_FAILED",
                 "score": 0,
                 "breakdown": {
@@ -721,7 +722,7 @@ Return ONLY valid JSON:
                     "tier": gps_tier,
                     "confidence": gps_confidence
                 },
-                "issues": self._generate_improvement_suggestions(breakdown, comparison, verification),
+                "issues": self._generate_improvement_suggestions(breakdown, verification),
                 "payment_recommended": False,
                 "can_resubmit": True,
                 "suggestions": [
@@ -752,7 +753,7 @@ Return ONLY valid JSON:
                 "suggestions": verification.get('suggestions', [])
             }
     
-    def _generate_improvement_suggestions(self, breakdown: Dict, comparison: Dict, verification: Dict) -> List[str]:
+    def _generate_improvement_suggestions(self, breakdown: Dict, verification: Dict) -> List[str]:
         """Generate specific improvement suggestions based on low scores"""
         suggestions = []
         
@@ -969,9 +970,10 @@ Return ONLY valid JSON:
                 ipfs_hash = url.replace("ipfs://", "")
                 url = f"https://ipfs.io/ipfs/{ipfs_hash}"
             
-            # Download image
-            response = httpx.get(url, timeout=30)
-            response.raise_for_status()
+            # Download image asynchronously to avoid blocking event loop
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=30)
+                response.raise_for_status()
             
             # Encode as base64
             image_bytes = response.content

@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
 import { User, Bot } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
@@ -8,33 +8,11 @@ interface ChatMessageProps {
   timestamp?: Date;
 }
 
-// Simple markdown-to-HTML converter for chat messages
-function formatMessage(text: string): string {
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/__(.+?)__/g, '<strong>$1</strong>')
-    // Italic: *text* or _text_ (but not **text**)
-    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
-    .replace(/_([^_]+?)_/g, '<em>$1</em>')
-    // Line breaks
-    .replace(/\n/g, '<br />')
-    // Numbered lists: 1. 2. 3. etc
-    .replace(/^(\d+)\.\s+(.+)$/gm, '<li class="ml-4">$2</li>')
-    // Wrap consecutive list items in <ol>
-    .replace(/(<li class="ml-4">.*<\/li>(\s*<br \/>)*)+/g, (match) => 
-      '<ol class="list-decimal ml-4 space-y-1">' + match.replace(/<br \/>/g, '') + '</ol>');
-}
-
 export default function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
   const isUser = role === 'user';
-  const [formattedTime, setFormattedTime] = useState<string>('');
-
-  useEffect(() => {
-    if (timestamp) {
-      setFormattedTime(timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    }
-  }, [timestamp]);
+  const formattedTime = timestamp
+    ? timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
 
   return (
     <div className={cn(
@@ -63,9 +41,20 @@ export default function ChatMessage({ role, content, timestamp }: ChatMessagePro
               ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white'
               : 'bg-slate-800 text-slate-100 border border-slate-700'
           )}>
-            <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-strong:text-cyan-400 prose-strong:font-semibold"
-              dangerouslySetInnerHTML={{ __html: formatMessage(content) }}
-            />
+            <div className="text-xs sm:text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  ol: ({ children }) => <ol className="list-decimal ml-4 space-y-1 my-2">{children}</ol>,
+                  ul: ({ children }) => <ul className="list-disc ml-4 space-y-1 my-2">{children}</ul>,
+                  li: ({ children }) => <li className="ml-1">{children}</li>,
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+            </div>
           </div>
 
           {/* Timestamp */}

@@ -12,17 +12,10 @@ interface ImageUploadProps {
 export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        console.log('[ImageUpload] File selection triggered:', files ? files.length : 0, 'files');
-        if (!files) return;
-
+    const processFiles = (files: FileList) => {
         Array.from(files).forEach((file) => {
-            console.log('[ImageUpload] Processing file:', file.name, 'Type:', file.type, 'Size:', (file.size / (1024 * 1024)).toFixed(2), 'MB');
-            
             // Check file type
             if (!file.type.startsWith('image/')) {
-                console.error('[ImageUpload] Invalid file type:', file.type);
                 alert(`"${file.name}" is not an image file.`);
                 return;
             }
@@ -30,10 +23,8 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
             // Read and optimize ALL images
             const reader = new FileReader();
             reader.onloadend = () => {
-                console.log('[ImageUpload] File read complete for:', file.name);
                 const img = new Image();
                 img.onload = () => {
-                    console.log('[ImageUpload] Image loaded - Original dimensions:', img.width, 'x', img.height);
                     // Resize if too large (max 1600x1600 for good quality vs token balance)
                     const MAX_DIMENSION = 1600;
                     let width = img.width;
@@ -49,23 +40,20 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         }
                     }
 
-                    console.log('[ImageUpload] Resizing to:', width, 'x', height);
                     // Create canvas and compress
                     const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     if (!ctx) {
-                        console.error('[ImageUpload] Failed to get canvas context');
+                        alert(`Failed to process "${file.name}". Please try again.`);
                         return;
                     }
                     ctx.drawImage(img, 0, 0, width, height);
-                    console.log('[ImageUpload] Canvas created, starting compression...');
 
                     // Compress to 85% quality JPEG
                     canvas.toBlob(
                         (blob) => {
-                            console.log('[ImageUpload] Blob created:', blob ? (blob.size / (1024 * 1024)).toFixed(2) + ' MB' : 'null');
                             if (blob) {
                                 const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
                                     type: 'image/jpeg',
@@ -75,35 +63,46 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                                 // Show size reduction if significant
                                 const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
                                 const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-                                console.log(`[ImageUpload] Size comparison - Original: ${originalSizeMB}MB, Optimized: ${optimizedSizeMB}MB`);
                                 if (file.size > blob.size * 1.5) {
                                     console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
                                 }
                                 
-                                console.log('[ImageUpload] Calling onAdd with optimized image:', optimizedFile.name);
                                 onAdd({
                                     file: optimizedFile,
                                     preview,
                                 });
-                                console.log('[ImageUpload] ✅ Image successfully added to state');
                             }
                         },
                         'image/jpeg',
                         0.85
                     );
                 };
-                img.onerror = (error) => {
-                    console.error('[ImageUpload] Image load error:', error);
+                img.onerror = () => {
+                    // Log error for diagnostics
+                    console.error(`Failed to load image: "${file.name}". The file may be corrupted or in an unsupported format.`);
+                    
+                    // Surface error to user
+                    alert(`Failed to load "${file.name}". The image may be corrupted or in an unsupported format.`);
+                    
+                    // Clean up: img element will be garbage collected
+                    // File is not added to the upload list, preventing silent failures
                 };
                 img.src = reader.result as string;
             };
-            reader.onerror = (error) => {
-                console.error('[ImageUpload] FileReader error:', error);
+            reader.onerror = () => {
+                console.error(`Failed to read file: "${file.name}".`);
+                alert(`Failed to read "${file.name}". Please try again.`);
             };
-            console.log('[ImageUpload] Starting FileReader.readAsDataURL...');
             reader.readAsDataURL(file);
         });
+    };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+        
+        processFiles(files);
+        
         // Reset input
         e.target.value = '';
     };
@@ -111,13 +110,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        // Simulate a change event for the dropped files
-        const dataTransfer = new DataTransfer();
-        Array.from(e.dataTransfer.files).forEach(file => dataTransfer.items.add(file));
-        const syntheticEvent = {
-            target: { files: dataTransfer.files, value: '' }
-        } as React.ChangeEvent<HTMLInputElement>;
-        handleFileChange(syntheticEvent);
+        processFiles(e.dataTransfer.files);
     };
 
     return (

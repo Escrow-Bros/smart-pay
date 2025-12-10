@@ -4,13 +4,25 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PlusCircle, ClipboardList, Wallet, Gem, Menu, X, ArrowLeftRight } from 'lucide-react';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const { state } = useApp();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // Prevent body scroll when mobile menu is open
+    useEffect(() => {
+        if (isMobileMenuOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isMobileMenuOpen]);
 
     const navItems = [
         { href: '/client/create', label: 'Create New Job', icon: PlusCircle },
