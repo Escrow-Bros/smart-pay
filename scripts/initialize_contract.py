@@ -62,7 +62,7 @@ async def main():
     print(f"   2. set_agent({agent_addr})")
     print(f"   3. set_treasury({treasury_addr})")
     print(f"   4. set_arbiter({agent_addr})  # Use agent as arbiter")
-    print(f"   5. set_fee_bps(500)  # 5% fee")
+    print("   5. set_fee_bps(500)  # 5% fee")
     print()
     
     # Setup ChainFacade
@@ -79,7 +79,7 @@ async def main():
             vault.call_function("set_owner", [deployer_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx1}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
         # Step 2: Set Agent
@@ -88,7 +88,7 @@ async def main():
             vault.call_function("set_agent", [agent_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx2}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
         # Step 3: Set Treasury
@@ -97,7 +97,7 @@ async def main():
             vault.call_function("set_treasury", [treasury_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx3}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
         # Step 4: Set Arbiter (use same agent address for MVP)
@@ -106,7 +106,7 @@ async def main():
             vault.call_function("set_arbiter", [agent_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx4}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
         # Step 5: Set Fee (500 basis points = 5%)
@@ -115,17 +115,17 @@ async def main():
             vault.call_function("set_fee_bps", [500])
         )
         print(f"   ✅ Transaction sent: {tx5}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
-        print(f"\n🎉 Contract initialization complete!")
-        print(f"\n📋 Contract State:")
+        print("\n🎉 Contract initialization complete!")
+        print("\n📋 Contract State:")
         print(f"   Owner: {deployer_addr}")
         print(f"   Agent: {agent_addr}")
         print(f"   Treasury: {treasury_addr}")
         print(f"   Arbiter: {agent_addr}  (same as agent)")
-        print(f"   Fee: 5% (500 bps)")
-        print(f"\n✅ Ready to create jobs and resolve disputes!")
+        print("   Fee: 5% (500 bps)")
+        print("\n✅ Ready to create jobs and resolve disputes!")
         print(f"🔍 View on Dora: https://testnet.neotube.io/contract/{contract_hash}")
         
     except Exception as e:

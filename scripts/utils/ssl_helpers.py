@@ -24,10 +24,11 @@ def create_testnet_ssl_context():
     env_mode = os.getenv('NETWORK_MODE', 'testnet').lower()
     allow_insecure = os.getenv('TESTNET_ALLOW_INSECURE', 'false').lower() == 'true'
     
-    # Fail-safe: refuse to disable SSL in production
-    if env_mode == 'production':
+    # Fail-safe: refuse to disable SSL verification in production
+    if env_mode == 'production' and allow_insecure:
         print("ERROR: Cannot disable SSL verification in production mode")
-        print("   Set NETWORK_MODE=testnet if you need insecure SSL for testing")
+        print("   TESTNET_ALLOW_INSECURE=true is not allowed when NETWORK_MODE=production")
+        print("   This would create a serious MITM vulnerability")
         sys.exit(1)
     
     if allow_insecure and env_mode == 'testnet':
@@ -38,5 +39,5 @@ def create_testnet_ssl_context():
         context.verify_mode = ssl.CERT_NONE
         return context
     else:
-        # Use default SSL verification
+        # Use default SSL verification (safe for both production and testnet)
         return ssl.create_default_context()

@@ -424,26 +424,10 @@ class Database:
                     WHERE job_id = ?
                 """, (job_id,))
             
-            # Commit changes before querying the updated dispute
-            conn.commit()
-            
-            # Now fetch the updated dispute from the same connection
-            cursor = conn.execute("""
-                SELECT 
-                    d.*,
-                    j.description, j.client_address, j.worker_address,
-                    j.amount, j.location, j.status as job_status,
-                    j.reference_photos, j.proof_photos, j.verification_result
-                FROM disputes d
-                JOIN jobs j ON d.job_id = j.job_id
-                WHERE d.dispute_id = ?
-            """, (dispute_id,))
-            
-            row = cursor.fetchone()
-            if row:
-                return dict(row)
-            else:
-                raise ValueError(f"Could not fetch updated dispute {dispute_id}")
+            # Commit happens automatically at end of with block
+        
+        # Reuse get_dispute to fetch updated record with proper JSON decoding
+        return self.get_dispute(dispute_id)
     
     # ==================== STATS ====================
     
