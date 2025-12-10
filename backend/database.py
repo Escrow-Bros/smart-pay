@@ -189,6 +189,16 @@ class Database:
             rows = cursor.fetchall()
             return [self._row_to_dict(row) for row in rows]
     
+    def get_jobs_by_status(self, status: str) -> List[Dict]:
+        """Get all jobs with a specific status (for recovery/monitoring)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM jobs 
+                WHERE status = ?
+                ORDER BY created_at DESC
+            """, (status,))
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
+    
     # ==================== UPDATE ====================
     
     def assign_job(self, job_id: int, worker_address: str) -> Dict:
