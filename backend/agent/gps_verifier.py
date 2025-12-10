@@ -39,20 +39,23 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 def verify_gps_location(
     reference_gps: Dict,
     proof_gps: Dict,
-    max_distance_meters: float = 200.0
+    max_distance_meters: float = 300.0
 ) -> Dict:
     """
     Verify that proof photo was taken at the job location
     
-    Tiered verification:
-    - 0-200m: PASS (high confidence)
-    - 201-500m: WARN (reduced confidence, but allow)
-    - 501+m: FAIL (likely fraud)
+    Uses tiered verification based on max_distance_meters:
+    - Tier 1 (Excellent): 0 to 40% of max - High confidence
+    - Tier 2 (Good): 40% to 70% of max - Medium-high confidence
+    - Tier 3 (Acceptable): 70% to 100% of max - Lower confidence but pass
+    - Tier 4 (Failed): Beyond max - Reject
+    
+    GPS accuracy (from both devices) is added to max_distance_meters as a tolerance buffer.
     
     Args:
         reference_gps: {"latitude": float, "longitude": float, "accuracy": float}
         proof_gps: {"lat": float, "lng": float, "accuracy": float}
-        max_distance_meters: Maximum allowed distance (default 200 meters)
+        max_distance_meters: Maximum allowed distance in meters (default 300m = typical job site radius)
     
     Returns:
         {
@@ -60,7 +63,8 @@ def verify_gps_location(
             "distance_meters": float,
             "confidence": float,
             "reasoning": str,
-            "tier": str  # 'excellent', 'good', 'acceptable', 'failed'
+            "tier": str,  # 'excellent', 'good', 'acceptable', 'failed'
+            "threshold_used": float  # actual max with GPS accuracy buffer
         }
     """
     try:
@@ -85,36 +89,39 @@ def verify_gps_location(
         # Calculate distance
         distance = calculate_distance(ref_lat, ref_lon, proof_lat, proof_lon)
         
-        # Account for GPS accuracy
+        # Account for GPS accuracy - add as tolerance buffer
         total_accuracy = ref_accuracy + proof_accuracy
         adjusted_max_distance = max_distance_meters + total_accuracy
         
-        # Tiered verification with progressive thresholds
-        # Tier 1: Excellent (0-200m) - High confidence
-        # Tier 2: Good (201-350m) - Medium-high confidence  
-        # Tier 3: Acceptable (351-500m) - Lower confidence but pass
-        # Tier 4: Failed (501+m) - Reject
+        # Calculate tier thresholds based on max_distance_meters
+        # This makes the tiers scale proportionally with the configured max
+        tier1_threshold = max_distance_meters * 0.4   # Excellent: 0-40% of max
+        tier2_threshold = max_distance_meters * 0.7   # Good: 40-70% of max
+        tier3_threshold = max_distance_meters         # Acceptable: 70-100% of max
         
-        if distance <= 200:
+        # Tiered verification with dynamic thresholds
+        if distance <= tier1_threshold:
             tier = 'excellent'
             location_match = True
-            confidence = 1.0 - (distance / 200) * 0.2  # 0.8-1.0 range
+            confidence = 1.0 - (distance / tier1_threshold) * 0.2  # 0.8-1.0 range
             reasoning = f"Worker at job site ({distance:.1f}m away - excellent)"
-        elif distance <= 350:
+        elif distance <= tier2_threshold:
             tier = 'good'
             location_match = True
-            confidence = 0.7 - (distance - 200) / 150 * 0.2  # 0.5-0.7 range
+            range_size = tier2_threshold - tier1_threshold
+            confidence = 0.7 - ((distance - tier1_threshold) / range_size) * 0.2  # 0.5-0.7 range
             reasoning = f"Worker near job site ({distance:.1f}m away - acceptable with GPS accuracy)"
-        elif distance <= 500:
+        elif distance <= tier3_threshold:
             tier = 'acceptable'
             location_match = True
-            confidence = 0.5 - (distance - 350) / 150 * 0.1  # 0.4-0.5 range
+            range_size = tier3_threshold - tier2_threshold
+            confidence = 0.5 - ((distance - tier2_threshold) / range_size) * 0.1  # 0.4-0.5 range
             reasoning = f"Worker in vicinity ({distance:.1f}m away - marginal, check photos carefully)"
         else:
             tier = 'failed'
             location_match = False
             confidence = 0.1
-            reasoning = f"Worker too far from job site ({distance:.1f}m away - max 500m)"
+            reasoning = f"Worker too far from job site ({distance:.1f}m away - max {max_distance_meters:.0f}m)"
         
         return {
             "location_match": location_match,
