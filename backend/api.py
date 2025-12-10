@@ -136,6 +136,27 @@ def get_validated_address(address: str) -> str:
 
 # ==================== VALIDATION MODELS ====================
 
+class VerificationPlan(BaseModel):
+    """Structured verification plan for AI Eye agent"""
+    task_category: str = Field(..., description="Category of task (e.g., 'cleaning', 'delivery', 'repair')")
+    success_criteria: List[str] = Field(default_factory=list, description="List of criteria for success")
+    rejection_criteria: List[str] = Field(default_factory=list, description="List of criteria for rejection")
+    visual_checks: List[str] = Field(default_factory=list, description="Specific visual elements to verify")
+    location_required: bool = Field(default=False, description="Whether GPS verification is required")
+    comparison_mode: str = Field(default="before_after", description="before_after, reference_match, or checklist")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task_category": "cleaning",
+                "success_criteria": ["Area is visibly clean", "No debris present"],
+                "rejection_criteria": ["Visible dirt", "Task incomplete"],
+                "visual_checks": ["Floor surface", "Corners", "Overall cleanliness"],
+                "location_required": True,
+                "comparison_mode": "before_after"
+            }
+        }
+
 class CreateJobRequest(BaseModel):
     client_address: str = Field(..., min_length=34, max_length=34, description="Neo N3 address (34 chars starting with N)")
     description: str = Field(..., min_length=10, max_length=5000, description="Job description (10-5000 chars)")
@@ -143,7 +164,7 @@ class CreateJobRequest(BaseModel):
     latitude: float = Field(0.0, ge=-90, le=90)
     longitude: float = Field(0.0, ge=-180, le=180)
     reference_photos: List[str] = Field(..., min_length=1, max_length=10, description="IPFS URLs")
-    verification_plan: dict = Field(...)
+    verification_plan: VerificationPlan = Field(..., description="Structured verification plan")
     amount: float = Field(..., gt=0, le=10000, description="Payment amount in GAS (0-10000)")
     
     @field_validator('client_address')
@@ -159,15 +180,6 @@ class CreateJobRequest(BaseModel):
         for url in v:
             if not url.startswith(('http://', 'https://')):
                 raise ValueError(f'Invalid IPFS URL: {url}')
-        return v
-    
-    @field_validator('verification_plan')
-    @classmethod
-    def validate_verification_plan(cls, v):
-        required = ['task_category']
-        for key in required:
-            if key not in v:
-                raise ValueError(f'Verification plan missing required field: {key}')
         return v
 
 class AssignJobRequest(BaseModel):
@@ -260,6 +272,39 @@ mcp = NeoMCP()
 load_arbiter_whitelist()
 print(f"✅ Loaded {len(ARBITER_WHITELIST)} authorized arbiters: {ARBITER_WHITELIST}")
 eye_agent = UniversalEyeAgent()
+
+# ==================== BACKGROUND TASK: TX MONITORING ====================
+
+async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attempts: int = 10):
+    """
+    Background task to monitor blockchain transaction confirmation.
+    Polls the blockchain every 15 seconds for up to 2.5 minutes.
+    Updates job status from PAYMENT_PENDING to COMPLETED once confirmed.
+    """
+    print(f"🔄 Starting transaction monitor for job #{job_id}, tx: {tx_hash}")
+    
+    for attempt in range(max_attempts):
+        await asyncio.sleep(15)  # Wait 15 seconds between checks
+        
+        try:
+            # Check on-chain job status
+            job_status = await mcp.get_job_status(job_id)
+            
+            if job_status.get("status") == "COMPLETED":
+                print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 15}s")
+                # Update database to COMPLETED
+                db.complete_job(job_id=job_id)
+                return
+            
+            print(f"⏳ Job #{job_id} still pending... (attempt {attempt + 1}/{max_attempts})")
+            
+        except Exception as e:
+            print(f"⚠️  Error checking job #{job_id} status: {e}")
+            continue
+    
+    # If we get here, transaction didn't confirm in time
+    print(f"⚠️  WARNING: Job #{job_id} transaction {tx_hash} not confirmed after {max_attempts * 15}s")
+    print(f"   Job remains in PAYMENT_PENDING status. Manual verification recommended.")
 
 
 # ==================== HEALTH CHECK ====================
@@ -432,6 +477,61 @@ async def get_worker_stats(worker_address: str):
             "completed_jobs": 0,
             "total_earnings": 0
         }
+
+
+@app.get("/api/jobs/{job_id}/status")
+async def get_job_status(job_id: int):
+    """
+    Poll job status - checks both database and blockchain.
+    Used by frontend to monitor PAYMENT_PENDING jobs.
+    
+    Returns:
+        - db_status: Current database status
+        - chain_status: Current blockchain status (if available)
+        - synced: Whether DB and blockchain are in sync
+    """
+    try:
+        # Get database status
+        job = db.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        db_status = job.get("status")
+        response = {
+            "job_id": job_id,
+            "db_status": db_status,
+            "tx_hash": job.get("tx_hash"),
+            "updated_at": job.get("completed_at") or job.get("assigned_at") or job.get("created_at")
+        }
+        
+        # If PAYMENT_PENDING, check blockchain status
+        if db_status == "PAYMENT_PENDING":
+            try:
+                chain_status = await mcp.get_job_status(job_id)
+                response["chain_status"] = chain_status.get("status")
+                response["synced"] = chain_status.get("status") == db_status
+                
+                # If blockchain shows COMPLETED but DB doesn't, update it
+                if chain_status.get("status") == "COMPLETED":
+                    print(f"🔄 Syncing job #{job_id}: blockchain is COMPLETED, updating DB")
+                    db.complete_job(job_id=job_id)
+                    response["db_status"] = "COMPLETED"
+                    response["synced"] = True
+            except Exception as e:
+                print(f"⚠️  Could not fetch blockchain status for job #{job_id}: {e}")
+                response["chain_status"] = "UNKNOWN"
+                response["synced"] = False
+        else:
+            response["chain_status"] = db_status
+            response["synced"] = True
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting job status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/jobs/{job_id}")
@@ -741,24 +841,34 @@ async def submit_proof(request: SubmitProofRequest):
         )
         
         if verification.get("verified"):
-            # Approved - Release funds
+            # Approved - Release funds (broadcast transaction)
             print(f"✅ Work approved for job #{request.job_id}, releasing funds...")
             release_result = await mcp.release_funds_on_chain(job_id=request.job_id)
             
             if release_result["success"]:
-                # Update DB to COMPLETED
-                job = db.complete_job(
+                # Update DB to PAYMENT_PENDING (not COMPLETED yet)
+                tx_hash = release_result["tx_hash"]
+                job = db.set_payment_pending(
                     job_id=request.job_id,
                     verification_result=verification,
-                    tx_hash=release_result["tx_hash"]
+                    tx_hash=tx_hash
+                )
+                
+                # Start background task to monitor confirmation
+                asyncio.create_task(
+                    monitor_transaction_confirmation(
+                        job_id=request.job_id,
+                        tx_hash=tx_hash
+                    )
                 )
                 
                 return {
                     "success": True,
-                    "message": "Work approved! Payment released.",
+                    "message": "Work approved! Payment transaction broadcast. Waiting for blockchain confirmation...",
                     "verification": verification,
                     "job": job,
-                    "tx_hash": release_result["tx_hash"]
+                    "tx_hash": tx_hash,
+                    "status": "PAYMENT_PENDING"
                 }
             else:
                 raise HTTPException(status_code=500, detail="Work approved but payment release failed. Please contact support.")

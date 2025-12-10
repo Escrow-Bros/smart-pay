@@ -219,22 +219,51 @@ class Database:
         
         return self.get_job(job_id)
     
-    def complete_job(
+    def set_payment_pending(
         self,
         job_id: int,
         verification_result: Dict,
         tx_hash: str
     ) -> Dict:
-        """Mark job as completed after payment release"""
+        """Mark job as payment pending (transaction broadcast but not confirmed)"""
         with self.get_connection() as conn:
             conn.execute("""
                 UPDATE jobs 
-                SET status = 'COMPLETED',
-                    completed_at = CURRENT_TIMESTAMP,
+                SET status = 'PAYMENT_PENDING',
                     verification_result = ?,
                     tx_hash = ?
                 WHERE job_id = ?
             """, (json.dumps(verification_result), tx_hash, job_id))
+        
+        return self.get_job(job_id)
+    
+    def complete_job(
+        self,
+        job_id: int,
+        verification_result: Dict = None,
+        tx_hash: str = None
+    ) -> Dict:
+        """Mark job as completed after payment confirmation on blockchain"""
+        with self.get_connection() as conn:
+            # Build UPDATE query dynamically based on provided fields
+            updates = ["status = 'COMPLETED'", "completed_at = CURRENT_TIMESTAMP"]
+            params = []
+            
+            if verification_result is not None:
+                updates.append("verification_result = ?")
+                params.append(json.dumps(verification_result))
+            
+            if tx_hash is not None:
+                updates.append("tx_hash = ?")
+                params.append(tx_hash)
+            
+            params.append(job_id)
+            
+            conn.execute(f"""
+                UPDATE jobs 
+                SET {', '.join(updates)}
+                WHERE job_id = ?
+            """, tuple(params))
         
         return self.get_job(job_id)
     
