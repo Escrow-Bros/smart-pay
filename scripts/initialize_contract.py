@@ -1,7 +1,5 @@
 import asyncio
 import sys
-import ssl
-import os
 from pathlib import Path
 from neo3.wallet.account import Account
 from neo3.api.wrappers import ChainFacade, GenericContract
@@ -10,28 +8,9 @@ from neo3.network.payloads.verification import Signer
 from neo3.core import types
 from neo3.wallet import utils as wallet_utils
 
-def create_testnet_ssl_context():
-    """Create SSL context for testnet with optional verification bypass"""
-    # Check if we're explicitly in testnet environment
-    env_mode = os.getenv('NETWORK_MODE', 'testnet').lower()
-    allow_insecure = os.getenv('TESTNET_ALLOW_INSECURE', 'false').lower() == 'true'
-    
-    # Fail-safe: refuse to disable SSL in production
-    if env_mode == 'production':
-        print("ERROR: Cannot disable SSL verification in production mode")
-        print("   Set NETWORK_MODE=testnet if you need insecure SSL for testing")
-        sys.exit(1)
-    
-    if allow_insecure and env_mode == 'testnet':
-        print("WARNING: SSL verification disabled for testnet (TESTNET_ALLOW_INSECURE=true)")
-        print("   This should NEVER be used in production environments")
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        return context
-    else:
-        # Use default SSL verification
-        return ssl.create_default_context()
+# Add scripts directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.ssl_helpers import create_testnet_ssl_context
 
 
 async def main():

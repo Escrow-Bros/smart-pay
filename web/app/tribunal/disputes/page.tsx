@@ -109,7 +109,7 @@ export default function AllDisputesPage() {
             )}
 
             {/* Filters and Search */}
-            <div className="bg-white rounded-lg shadow p-4">,
+            <div className="bg-white rounded-lg shadow p-4">
                 <div className="flex flex-col md:flex-row gap-4">
                     {/* Search */}
                     <div className="flex-1">

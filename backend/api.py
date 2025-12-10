@@ -44,22 +44,17 @@ class RateLimiter:
         """Check if request is allowed for given identifier (IP/wallet)"""
         with self.lock:
             now = time.time()
-            # Clean old requests
+            # Clean old requests outside the window
             self.requests[identifier] = [
                 req_time for req_time in self.requests[identifier]
                 if now - req_time < self.window_seconds
             ]
             
-            # Remove empty entries to prevent unbounded growth
-            if not self.requests[identifier]:
-                del self.requests[identifier]
-                # Allow the request since no recent history
-                return True
-            
-            # Check limit
+            # Check if limit exceeded
             if len(self.requests[identifier]) >= self.max_requests:
                 return False
-            # Record request
+            
+            # Record this request and allow it
             self.requests[identifier].append(now)
             return True
 
@@ -76,9 +71,17 @@ ARBITER_WHITELIST = set()
 
 def load_arbiter_whitelist():
     """Load arbiter addresses from environment variables"""
+    # Default arbiter address (fallback for development)
+    DEFAULT_ARBITER = 'NRF64mpLJ8yExn38EjwkxzPGoJ5PLyUbtP'
+    
     agent_addr = os.getenv('AGENT_ADDR', '')
     if agent_addr:
         ARBITER_WHITELIST.add(agent_addr)
+    else:
+        # If no AGENT_ADDR set, use default for development
+        print(f"ℹ️  No AGENT_ADDR in environment, using default arbiter: {DEFAULT_ARBITER}")
+        ARBITER_WHITELIST.add(DEFAULT_ARBITER)
+    
     # Add additional arbiters from comma-separated env var
     extra_arbiters = os.getenv('ARBITER_ADDRESSES', '')
     if extra_arbiters:
@@ -86,6 +89,12 @@ def load_arbiter_whitelist():
             addr = addr.strip()
             if addr:
                 ARBITER_WHITELIST.add(addr)
+    
+    # Fail-safe: warn if no arbiters configured (shouldn't happen with default)
+    if not ARBITER_WHITELIST:
+        print("⚠️  WARNING: No arbiters configured in ARBITER_WHITELIST!")
+        print("   Set AGENT_ADDR or ARBITER_ADDRESSES in .env to enable dispute resolution")
+        print("   All dispute resolution attempts will be rejected with 403")
 
 # Audit log storage (in production, use proper database table)
 AUDIT_LOGS = []
@@ -398,17 +407,31 @@ async def get_worker_history(worker_address: str):
 async def get_worker_stats(worker_address: str):
     """Get worker statistics"""
     try:
-        # Validate address
+        # Validate address format
         if not worker_address or not worker_address.startswith('N') or len(worker_address) != 34:
-            return {"total_jobs": 0, "completed": 0, "active": 0, "total_earned": 0}  # Return defaults
+            return {
+                "total_jobs": 0,
+                "completed_jobs": 0,
+                "total_earnings": 0
+            }
         
         stats = db.get_worker_stats(worker_address)
-        return stats
+        
+        # Explicitly map to ensure consistent response schema
+        return {
+            "total_jobs": stats["total_jobs"],
+            "completed_jobs": stats["completed_jobs"],
+            "total_earnings": stats["total_earnings"]
+        }
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error getting worker stats: {str(e)}")
-        return {"total_jobs": 0, "completed": 0, "active": 0, "total_earned": 0}  # Return defaults on error
+        return {
+            "total_jobs": 0,
+            "completed_jobs": 0,
+            "total_earnings": 0
+        }
 
 
 @app.get("/api/jobs/{job_id}")

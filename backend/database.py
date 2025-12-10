@@ -261,6 +261,7 @@ class Database:
         evidence_photos: Optional[List[str]] = None
     ) -> Dict:
         """Create a new dispute record"""
+        dispute_id = None
         with self.get_connection() as conn:
             cursor = conn.execute("""
                 INSERT INTO disputes (
@@ -285,7 +286,10 @@ class Database:
                 WHERE job_id = ? AND status != 'DISPUTED'
             """, (json.dumps({"disputed": True, "reason": reason}), job_id))
             
-            return self.get_dispute(dispute_id)
+            # Commit happens automatically at end of with block
+        
+        # Fetch the committed dispute from a fresh connection
+        return self.get_dispute(dispute_id)
     
     def get_dispute(self, dispute_id: int) -> Optional[Dict]:
         """Get dispute by ID with job details"""
