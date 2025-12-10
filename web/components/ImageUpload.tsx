@@ -54,24 +54,56 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     // Compress to 85% quality JPEG
                     canvas.toBlob(
                         (blob) => {
-                            if (blob) {
-                                const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
-                                    type: 'image/jpeg',
-                                });
-                                const preview = canvas.toDataURL('image/jpeg', 0.85);
+                            if (!blob) {
+                                // Blob creation failed, try fallback with toDataURL
+                                console.error(`Failed to create blob for "${file.name}". Attempting fallback...`);
                                 
-                                // Show size reduction if significant
-                                const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                                const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-                                if (file.size > blob.size * 1.5) {
-                                    console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
+                                try {
+                                    // Fallback: convert data URL to Blob
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                    const response = fetch(dataUrl);
+                                    response.then(res => res.blob()).then(fallbackBlob => {
+                                        if (fallbackBlob) {
+                                            const optimizedFile = new File([fallbackBlob], file.name.replace(/\.\w+$/, '.jpg'), {
+                                                type: 'image/jpeg',
+                                            });
+                                            onAdd({
+                                                file: optimizedFile,
+                                                preview: dataUrl,
+                                            });
+                                            console.log(`✅ Processed ${file.name} using fallback method`);
+                                        } else {
+                                            throw new Error('Fallback blob creation failed');
+                                        }
+                                    }).catch(() => {
+                                        // Both methods failed
+                                        console.error(`Failed to process "${file.name}" - blob conversion failed.`);
+                                        alert(`Failed to process "${file.name}". The image may be too large or in an unsupported format.`);
+                                    });
+                                } catch (error) {
+                                    console.error(`Error processing "${file.name}":`, error);
+                                    alert(`Failed to process "${file.name}". Please try again.`);
                                 }
-                                
-                                onAdd({
-                                    file: optimizedFile,
-                                    preview,
-                                });
+                                return; // Terminate processing
                             }
+                            
+                            // Success: blob created normally
+                            const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+                                type: 'image/jpeg',
+                            });
+                            const preview = canvas.toDataURL('image/jpeg', 0.85);
+                            
+                            // Show size reduction if significant
+                            const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                            const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                            if (file.size > blob.size * 1.5) {
+                                console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
+                            }
+                            
+                            onAdd({
+                                file: optimizedFile,
+                                preview,
+                            });
                         },
                         'image/jpeg',
                         0.85

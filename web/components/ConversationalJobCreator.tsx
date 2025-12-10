@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '@/context/AppContext';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
@@ -59,16 +59,7 @@ export default function ConversationalJobCreator() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Process pending messages after loading completes
-  useEffect(() => {
-    if (!isLoading && pendingMessageRef.current) {
-      const pendingMsg = pendingMessageRef.current;
-      pendingMessageRef.current = null;
-      handleSendMessage(pendingMsg);
-    }
-  }, [isLoading]);
-
-  const handleSendMessage = async (userMessage: string) => {
+  const handleSendMessage = useCallback(async (userMessage: string) => {
     if (isLoading) {
       // Queue message for later if already processing
       pendingMessageRef.current = userMessage;
@@ -135,7 +126,16 @@ export default function ConversationalJobCreator() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading, sessionId, state.clientUploadedImages.length, extractedData.has_image, state.jobLocation, setJobLocation]);
+
+  // Process pending messages after loading completes
+  useEffect(() => {
+    if (!isLoading && pendingMessageRef.current) {
+      const pendingMsg = pendingMessageRef.current;
+      pendingMessageRef.current = null;
+      handleSendMessage(pendingMsg);
+    }
+  }, [isLoading, handleSendMessage]);
 
   const handleImageUpload = (image: UploadedImage) => {
     addUploadedImage(image);

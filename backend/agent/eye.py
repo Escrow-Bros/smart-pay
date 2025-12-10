@@ -546,12 +546,12 @@ Return ONLY valid JSON:
                 },
                 "issues": [
                     f"Worker location: {distance_text} from job site",
-                    "Maximum allowed: 500m",
+                    "Maximum allowed: 300m",
                     "Please ensure you are physically at the job location"
                 ],
                 "gps_data": {
                     "distance_meters": distance,
-                    "max_allowed_meters": 500.0,
+                    "max_allowed_meters": 300.0,
                     "tier": gps_check.get('tier', 'failed'),
                     "reasoning": gps_check.get('reasoning')
                 },

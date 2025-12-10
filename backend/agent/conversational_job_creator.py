@@ -163,12 +163,14 @@ class ConversationalJobCreator:
     def __init__(self):
         self.ai_client = get_ai_client()
         self.sessions: Dict[str, ConversationState] = {}
+        self._sessions_lock = threading.Lock()
     
     def get_or_create_session(self, session_id: str) -> ConversationState:
-        """Get existing session or create new one"""
-        if session_id not in self.sessions:
-            self.sessions[session_id] = ConversationState(session_id)
-        return self.sessions[session_id]
+        """Get existing session or create new one (thread-safe)"""
+        with self._sessions_lock:
+            if session_id not in self.sessions:
+                self.sessions[session_id] = ConversationState(session_id)
+            return self.sessions[session_id]
     
     async def process_message(
         self,
@@ -414,15 +416,17 @@ Be natural, helpful, and SMART about what evidence is actually needed!"""
         return prompt
     
     def get_session_state(self, session_id: str) -> Optional[Dict]:
-        """Get current state of a session"""
-        if session_id in self.sessions:
-            return self.sessions[session_id].to_dict()
-        return None
+        """Get current state of a session (thread-safe)"""
+        with self._sessions_lock:
+            if session_id in self.sessions:
+                return self.sessions[session_id].to_dict()
+            return None
     
     def clear_session(self, session_id: str):
-        """Clear a conversation session"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
+        """Clear a conversation session (thread-safe)"""
+        with self._sessions_lock:
+            if session_id in self.sessions:
+                del self.sessions[session_id]
 
 
 # Global instance with thread-safety

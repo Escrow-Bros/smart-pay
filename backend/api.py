@@ -4,7 +4,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
@@ -45,6 +45,14 @@ class RateLimiter:
                 req_time for req_time in self.requests[identifier]
                 if now - req_time < self.window_seconds
             ]
+            
+            # Remove empty entries to prevent unbounded growth
+            if not self.requests[identifier]:
+                del self.requests[identifier]
+                # Allow the request since no recent history
+                self.requests[identifier] = [now]
+                return True
+            
             # Check limit
             if len(self.requests[identifier]) >= self.max_requests:
                 return False
@@ -53,6 +61,18 @@ class RateLimiter:
             return True
 
 rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
+
+# ==================== ADDRESS VALIDATION ====================
+
+def validate_neo_address(address: str) -> str:
+    """Validate Neo N3 address format and return it if valid"""
+    if not address.startswith('N') or len(address) != 34:
+        raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
+    return address
+
+def get_validated_address(address: str) -> str:
+    """FastAPI dependency for validated Neo N3 address"""
+    return validate_neo_address(address)
 
 # ==================== VALIDATION MODELS ====================
 
@@ -265,12 +285,9 @@ async def list_available_jobs():
 
 
 @app.get("/api/jobs/client/{address}")
-async def get_client_jobs(address: str):
+async def get_client_jobs(address: str = Depends(get_validated_address)):
     """Get all jobs created by a client (with full details for owner)"""
     try:
-        if not address.startswith('N') or len(address) != 34:
-            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
-        
         jobs = db.get_client_jobs(address)
         return {
             "success": True,
@@ -286,12 +303,9 @@ async def get_client_jobs(address: str):
 
 
 @app.get("/api/jobs/worker/{worker_address}/current")
-async def get_worker_active_jobs(worker_address: str):
+async def get_worker_active_jobs(worker_address: str = Depends(get_validated_address)):
     """Get all active jobs for a worker (LOCKED + DISPUTED)"""
     try:
-        if not worker_address.startswith('N') or len(worker_address) != 34:
-            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
-        
         jobs = db.get_worker_active_jobs(worker_address)
         return {"jobs": jobs}
     except HTTPException:
@@ -302,12 +316,9 @@ async def get_worker_active_jobs(worker_address: str):
 
 
 @app.get("/api/jobs/worker/{worker_address}/history")
-async def get_worker_history(worker_address: str):
+async def get_worker_history(worker_address: str = Depends(get_validated_address)):
     """Get all completed jobs for a worker"""
     try:
-        if not worker_address.startswith('N') or len(worker_address) != 34:
-            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
-        
         jobs = db.get_worker_completed_jobs(worker_address)
         return {"jobs": jobs}
     except HTTPException:
@@ -318,12 +329,9 @@ async def get_worker_history(worker_address: str):
 
 
 @app.get("/api/jobs/worker/{worker_address}/stats")
-async def get_worker_stats(worker_address: str):
+async def get_worker_stats(worker_address: str = Depends(get_validated_address)):
     """Get worker statistics"""
     try:
-        if not worker_address.startswith('N') or len(worker_address) != 34:
-            raise HTTPException(status_code=400, detail="Invalid Neo N3 address format")
-        
         stats = db.get_worker_stats(worker_address)
         return stats
     except HTTPException:
