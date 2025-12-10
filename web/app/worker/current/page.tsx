@@ -5,6 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { apiClient } from '@/lib/api';
 import ImageUpload from '@/components/ImageUpload';
 import { JobDict, UploadedImage } from '@/lib/types';
+import { formatGasWithUSD } from '@/lib/currency';
 
 export default function WorkerCurrentJobPage() {
     const { state, fetchData } = useApp();
@@ -176,33 +177,37 @@ export default function WorkerCurrentJobPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Job List Sidebar */}
                 <div className="lg:col-span-1 space-y-4">
-                    {state.currentJobs.map((job) => (
-                        <div
-                            key={job.job_id}
-                            onClick={() => {
-                                setSelectedJob(job);
-                                setProofImages([]); // Clear images when switching jobs
-                            }}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all ${activeJob.job_id === job.job_id
-                                ? 'bg-slate-800 border-cyan-500 shadow-lg shadow-cyan-900/20'
-                                : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
-                                }`}
-                        >
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-sm font-mono text-slate-400">#{job.job_id}</span>
-                                <div className="flex flex-col items-end">
-                                    <span className="text-green-400 font-bold text-sm">{job.amount} GAS</span>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${job.status === 'DISPUTED'
-                                        ? 'bg-red-900/50 text-red-400 border border-red-800'
-                                        : 'bg-blue-900/50 text-blue-400 border border-blue-800'
-                                        }`}>
-                                        {job.status}
-                                    </span>
+                    {state.currentJobs.map((job) => {
+                        const { gas, usd } = formatGasWithUSD(job.amount);
+                        return (
+                            <div
+                                key={job.job_id}
+                                onClick={() => {
+                                    setSelectedJob(job);
+                                    setProofImages([]); // Clear images when switching jobs
+                                }}
+                                className={`p-4 rounded-xl border cursor-pointer transition-all ${activeJob.job_id === job.job_id
+                                    ? 'bg-slate-800 border-cyan-500 shadow-lg shadow-cyan-900/20'
+                                    : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
+                                    }`}
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-sm font-mono text-slate-400">#{job.job_id}</span>
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-green-400 font-bold text-sm">{gas} GAS</span>
+                                        <span className="text-slate-500 text-xs">{usd}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${job.status === 'DISPUTED'
+                                            ? 'bg-red-900/50 text-red-400 border border-red-800'
+                                            : 'bg-blue-900/50 text-blue-400 border border-blue-800'
+                                            }`}>
+                                            {job.status}
+                                        </span>
+                                    </div>
                                 </div>
+                                <p className="text-slate-200 text-sm line-clamp-2">{job.description}</p>
                             </div>
-                            <p className="text-slate-200 text-sm line-clamp-2">{job.description}</p>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* Active Job Details */}
@@ -219,7 +224,19 @@ export default function WorkerCurrentJobPage() {
                                         {activeJob.status}
                                     </span>
                                 </div>
-                                <span className="text-green-400 font-bold text-2xl">{activeJob.amount} GAS</span>
+                                <div className="text-right">
+                                    {(() => {
+                                        const { gas, usd } = formatGasWithUSD(activeJob.amount);
+                                        return (
+                                            <>
+                                                <div className="flex items-baseline gap-1 justify-end">
+                                                    <span className="text-green-400 font-bold text-2xl">{gas} GAS</span>
+                                                </div>
+                                                <div className="text-slate-500 text-sm">{usd}</div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
                             </div>
 
                             <p className="text-slate-200 mb-4">{activeJob.description}</p>

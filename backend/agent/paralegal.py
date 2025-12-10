@@ -1,69 +1,188 @@
+"""Paralegal Agent - Job Analysis & Validation using AI
+
+Uses native Sudo AI SDK for production-ready, type-safe AI integration.
+Supports structured JSON output with schema validation.
+"""
 import json
 import os
 import base64
-from typing import List
-import httpx
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
-from spoon_ai.llm import LLMManager, ConfigurationManager
-from spoon_ai.schema import Message
+from sudo_ai import Sudo
+from backend.config import AgentConfig
 
-# ==================== SUDO AI COMPATIBILITY PATCHES ====================
-# These patches fix compatibility issues between spoon_ai library and Sudo AI proxy
+load_dotenv()
 
-# PATCH 1: Fix HTTP headers (removes stainless headers, modifies user-agent)
-_original_request_init = httpx.Request.__init__
 
-def _patched_request_init(self, *args, **kwargs):
-    """Remove incompatible headers from httpx requests"""
-    _original_request_init(self, *args, **kwargs)
-    headers_to_remove = []
-    headers_to_modify = {}
-    for name in self.headers.keys():
-        name_lower = name.lower()
-        if 'stainless' in name_lower:
-            headers_to_remove.append(name)
-        elif name_lower == 'user-agent' and 'openai' in self.headers[name].lower():
-            headers_to_modify[name] = 'python-requests/2.32.5'
-    for name in headers_to_remove:
-        del self.headers[name]
-    for name, value in headers_to_modify.items():
-        self.headers[name] = value
-
-httpx.Request.__init__ = _patched_request_init
-
-# PATCH 2: Remove tool_choice parameter (Sudo AI rejects it when no tools defined)
-def _patch_openai_tool_choice():
-    """Patch OpenAI client to remove tool_choice when no tools are provided"""
-    try:
-        import openai.resources.chat.completions
+# ==================== AI CLIENT (MODULAR - SUDO SDK) ====================
+class AIClient:
+    """Modular AI client using native Sudo SDK for production use"""
+    
+    def __init__(self):
+        self.client = Sudo(
+            api_key=AgentConfig.SUDO_API_KEY,
+            server_url=AgentConfig.SUDO_SERVER_URL
+        )
+    
+    async def generate_text(
+        self,
+        prompt: str,
+        model: str = None,
+        temperature: float = None,
+        max_tokens: int = 2000,
+        response_format: Optional[Dict] = None
+    ) -> str:
+        """Generate text completion with optional structured output"""
+        params = {
+            "model": model or AgentConfig.TEXT_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature or AgentConfig.TEMPERATURE,
+            "max_completion_tokens": max_tokens  # Sudo SDK uses max_completion_tokens
+        }
         
-        # Patch AsyncCompletions.create
-        original_async_create = openai.resources.chat.completions.AsyncCompletions.create
+        # Add response format for structured JSON output
+        if response_format:
+            params["response_format"] = response_format
         
-        async def patched_async_create(self, *args, **kwargs):
-            if 'tool_choice' in kwargs and not kwargs.get('tools'):
-                # Sudo AI proxy error fix: Don't send tool_choice if no tools
-                del kwargs['tool_choice']
-            return await original_async_create(self, *args, **kwargs)
-            
-        openai.resources.chat.completions.AsyncCompletions.create = patched_async_create
-        print("✅ Applied tool_choice removal patch to OpenAI AsyncCompletions")
+        response = await self.client.router.create_async(**params)
+        return response.choices[0].message.content
+    
+    async def analyze_image(
+        self,
+        prompt: str,
+        image_base64: str,
+        mime_type: str = "image/jpeg",
+        model: str = None,
+        temperature: float = None,
+        max_tokens: int = 500,
+        response_format: Optional[Dict] = None
+    ) -> str:
+        """Analyze single image with vision model"""
+        params = {
+            "model": model or AgentConfig.VISION_MODEL,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{image_base64}"
+                        }
+                    }
+                ]
+            }],
+            "temperature": temperature or AgentConfig.TEMPERATURE,
+            "max_completion_tokens": max_tokens  # Sudo SDK uses max_completion_tokens
+        }
         
-    except Exception as e:
-        print(f"⚠️  Could not apply tool_choice patch: {e}")
+        if response_format:
+            params["response_format"] = response_format
+        
+        response = await self.client.router.create_async(**params)
+        return response.choices[0].message.content
+    
+    async def analyze_multi_image(
+        self,
+        content: List[Dict[str, Any]],
+        model: str = None,
+        temperature: float = None,
+        max_tokens: int = 1000,
+        response_format: Optional[Dict] = None
+    ) -> str:
+        """Analyze multiple images with vision model (advanced)"""
+        params = {
+            "model": model or AgentConfig.VISION_MODEL,
+            "messages": [{"role": "user", "content": content}],
+            "temperature": temperature or AgentConfig.TEMPERATURE,
+            "max_completion_tokens": max_tokens  # Sudo SDK uses max_completion_tokens
+        }
+        
+        if response_format:
+            params["response_format"] = response_format
+        
+        response = await self.client.router.create_async(**params)
+        return response.choices[0].message.content
 
-_patch_openai_tool_choice()
 
-# ========================================================================
+# Global AI client instance (singleton pattern)
+_ai_client = None
 
-load_dotenv()  # Loads from root .env
+def get_ai_client() -> AIClient:
+    """Get or create global AI client instance"""
+    global _ai_client
+    if _ai_client is None:
+        _ai_client = AIClient()
+    return _ai_client
+
+
+# ==================== JSON SCHEMAS FOR STRUCTURED OUTPUT ====================
+# Sudo SDK supports json_schema response format for guaranteed valid JSON
+
+CLARITY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_clear": {"type": "boolean"},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "questions": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["is_clear", "issues", "questions"],
+    "additionalProperties": False
+}
+
+VISION_MATCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "match": {"type": "boolean"},
+        "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "image_shows": {"type": "string"},
+        "mismatch_reason": {"type": ["string", "null"]}
+    },
+    "required": ["match", "confidence", "image_shows"],
+    "additionalProperties": False
+}
+
+EXTRACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "task": {"type": ["string", "null"]},
+        "task_description": {"type": ["string", "null"]},
+        "location": {"type": ["string", "null"]},
+        "price_amount": {"type": ["number", "null"]},
+        "price_currency": {"type": ["string", "null"]},
+        "missing_fields": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["task", "task_description", "location", "price_amount", "price_currency", "missing_fields"],
+    "additionalProperties": False
+}
+
+VERIFICATION_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "task_category": {"type": "string"},
+        "expected_transformation": {
+            "type": "object",
+            "properties": {
+                "before": {"type": "string"},
+                "after": {"type": "string"}
+            },
+            "required": ["before", "after"]
+        },
+        "quality_indicators": {"type": "array", "items": {"type": "string"}},
+        "verification_checklist": {"type": "array", "items": {"type": "string"}},
+        "common_mistakes": {"type": "array", "items": {"type": "string"}},
+        "required_evidence": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["task_category", "expected_transformation", "quality_indicators", "verification_checklist", "common_mistakes", "required_evidence"],
+    "additionalProperties": False
+}
 
 
 class ParalegalConfig:
     """Configuration for Paralegal Agent"""
-    MODEL = "gpt-4"
-    VISION_MODEL = "gpt-4o"
-    TEMPERATURE = 0.1
+    MODEL = AgentConfig.TEXT_MODEL  # gpt-4.1
+    VISION_MODEL = AgentConfig.VISION_MODEL  # gpt-4o
+    TEMPERATURE = AgentConfig.TEMPERATURE  # 0.1
     VALIDATION_MODE = "strict"
     REQUIRED_FIELDS = ["task", "task_description", "location", "price_amount", "price_currency"]
 
@@ -83,8 +202,7 @@ async def validate_clarity(text: str, extracted_data: dict) -> dict:
     if has_task and has_description and has_location and has_price:
         return {"is_clear": True, "issues": [], "questions": []}
     
-    config = ConfigurationManager()
-    manager = LLMManager(config)
+    ai_client = get_ai_client()
     
     clarity_prompt = f"""
 You are a job clarity validator. Check if CRITICAL information is missing.
@@ -100,25 +218,30 @@ ONLY flag as unclear if:
 
 IGNORE: Grammar mistakes, typos, awkward wording
 
-Return ONLY valid JSON:
-{{
-  "is_clear": boolean,
-  "issues": ["only list MISSING critical info"],
-  "questions": ["only ask for MISSING info"]
-}}
+Your response will be automatically parsed as JSON matching the schema provided.
 """
     
     try:
-        messages = [Message(role="user", content=clarity_prompt)]
-        response = await manager.chat(messages, model=ParalegalConfig.MODEL)
-        content = response.content.replace("```json", "").replace("```", "").strip()
-        result = json.loads(content)
-        
-        return {
-            "is_clear": result.get("is_clear", False),
-            "issues": result.get("issues", []),
-            "questions": result.get("questions", [])
+        # Use structured output with JSON schema validation
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "clarity_validation",
+                "schema": CLARITY_SCHEMA,
+                "strict": True
+            }
         }
+        
+        content = await ai_client.generate_text(
+            clarity_prompt, 
+            model=ParalegalConfig.MODEL,
+            response_format=response_format
+        )
+        
+        # Schema validation guarantees valid JSON - no try/except needed
+        result = json.loads(content)
+        return result
+        
     except Exception:
         if has_task and has_description and has_location and has_price:
             return {"is_clear": True, "issues": [], "questions": []}
@@ -138,14 +261,9 @@ async def verify_image_match(text: str, task: str, task_description: str, image_
     """
     try:
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        print(f"🔍 Analyzing image: Type={mime_type}, Size={len(image_bytes)} bytes, Base64 len={len(image_base64)}")
-        print(f"🔍 Base64 start: {image_base64[:50]}...")
+        print(f"🔍 Analyzing image: Type={mime_type}, Size={len(image_bytes)} bytes")
         
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL")
-        )
+        ai_client = get_ai_client()
         
         vision_prompt = f"""Analyze this reference image and compare it to the job description.
 
@@ -170,43 +288,30 @@ ONLY flag as MISMATCH if:
 - The image shows something completely unrelated (e.g. "Fix window" but image shows a car).
 - The image shows the work is ALREADY DONE (e.g. "Fix window" but image shows a perfect window).
 
-Return ONLY valid JSON:
-{{
-  "match": true/false,
-  "confidence": 0.0-1.0,
-  "image_shows": "detailed description of what you actually see in the image",
-  "mismatch_reason": "explanation if match is false, null if match is true"
-}}"""
+Your response will be automatically parsed as JSON matching the schema provided."""
         
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": vision_prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{image_base64}",
-                            "detail": "high"
-                        }
-                    }
-                ]
-            }],
+        # Use structured output with JSON schema validation
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "vision_match",
+                "schema": VISION_MATCH_SCHEMA,
+                "strict": True
+            }
+        }
+        
+        content = await ai_client.analyze_image(
+            vision_prompt,
+            image_base64,
+            mime_type=mime_type,
+            model=ParalegalConfig.VISION_MODEL,
             max_tokens=500,
-            temperature=0.1
+            response_format=response_format
         )
         
-        content = response.choices[0].message.content
-        content = content.replace("```json", "").replace("```", "").strip()
+        # Schema validation guarantees valid JSON
         result = json.loads(content)
-        
-        return {
-            "match": result.get("match", False),
-            "confidence": result.get("confidence", 0.0),
-            "image_shows": result.get("image_shows", "Unknown"),
-            "mismatch_reason": result.get("mismatch_reason")
-        }
+        return result
         
     except Exception as e:
         return {
@@ -218,56 +323,52 @@ Return ONLY valid JSON:
 
 
 async def generate_verification_plan(task: str, task_description: str) -> dict:
-    """
-    Generate verification plan for Eye agent.
+    """Generate verification plan for Eye agent.
     
     Returns:
-        dict: Verification plan with task category, transformation, checklist, etc.
+        dict: Verification plan with category, transformation, checklist, indicators.
     """
-    config = ConfigurationManager()
-    manager = LLMManager(config)
+    ai_client = get_ai_client()
     
-    plan_prompt = f"""
-Generate a verification plan for this task:
+    plan_prompt = f"""Generate verification plan for this task:
 
 Task: "{task}"
 Full Description: "{task_description}"
 
 The Eye agent will use this plan to verify if worker completed the task correctly.
 
-Return ONLY valid JSON with this structure:
-{{
-  "task_category": "category (e.g., painting, cleaning, delivery, landscaping, repair)",
-  "expected_transformation": {{
-    "before": "what the current state should look like",
-    "after": "what the completed state should look like"
-  }},
-  "quality_indicators": [
-    "list of things that indicate quality work",
-    "e.g., 'even coverage', 'clean edges', 'no debris'"
-  ],
-  "verification_checklist": [
-    "specific yes/no questions to verify completion",
-    "e.g., 'Is it the same wall?', 'Is color correct?'"
-  ],
-  "common_mistakes": [
-    "things workers might try to hide",
-    "e.g., 'showing only small section', 'hiding bad edges'"
-  ],
-  "required_evidence": [
-    "what must be visible in proof photos",
-    "e.g., 'full wall visible', 'all corners visible'"
-  ]
-}}
+Provide:
+1. task_category: Type of work (painting, cleaning, delivery, landscaping, repair, etc.)
+2. expected_transformation: What should change from before to after
+3. quality_indicators: Signs of quality work
+4. verification_checklist: Yes/no questions to verify completion
+5. common_mistakes: Things workers might try to hide
+6. required_evidence: What must be visible in proof photos
 
 Make it specific to this exact task type.
+Your response will be automatically parsed as JSON matching the schema provided.
 """
     
     try:
-        messages = [Message(role="user", content=plan_prompt)]
-        response = await manager.chat(messages, model=ParalegalConfig.MODEL)
-        content = response.content.replace("```json", "").replace("```", "").strip()
+        # Use structured output with JSON schema validation
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "verification_plan",
+                "schema": VERIFICATION_PLAN_SCHEMA,
+                "strict": True
+            }
+        }
+        
+        content = await ai_client.generate_text(
+            plan_prompt, 
+            model=ParalegalConfig.MODEL,
+            response_format=response_format
+        )
+        
+        # Schema validation guarantees valid JSON
         return json.loads(content)
+        
     except Exception:
         return {
             "task_category": "general",
@@ -287,14 +388,12 @@ Make it specific to this exact task type.
 
 
 async def generate_acceptance_criteria(task: str, location: str) -> List[str]:
-    """
-    Generate strict, measurable acceptance criteria.
+    """Generate strict, measurable acceptance criteria.
     
     Returns:
         List[str]: List of specific criteria strings
     """
-    config = ConfigurationManager()
-    manager = LLMManager(config)
+    ai_client = get_ai_client()
     
     criteria_prompt = f"""
 Generate strict acceptance criteria for this task:
@@ -313,9 +412,8 @@ Return ONLY a JSON array of criteria strings:
 """
     
     try:
-        messages = [Message(role="user", content=criteria_prompt)]
-        response = await manager.chat(messages, model=ParalegalConfig.MODEL)
-        content = response.content.replace("```json", "").replace("```", "").strip()
+        content = await ai_client.generate_text(criteria_prompt, model=ParalegalConfig.MODEL)
+        content = content.replace("```json", "").replace("```", "").strip()
         criteria = json.loads(content)
         
         if isinstance(criteria, list):
@@ -422,36 +520,50 @@ async def analyze_job_request(text: str, reference_image: bytes, location: str =
 
 async def _extract_basic_data(text: str) -> dict:
     """Extract task, description, location, price from text."""
-    config = ConfigurationManager()
-    manager = LLMManager(config)
+    ai_client = get_ai_client()
     
     extraction_prompt = f"""
 Extract structured data from this job description:
 
 Text: "{text}"
 
-Return ONLY valid JSON:
-{{
-  "task": "short summary of task (e.g. 'Fix Window') or null if missing",
-  "task_description": "rephrased, clear, and professional description of what exactly needs to be done based on the text or null if missing",
-  "location": "address or location description or null if missing",
-  "price_amount": number or null if missing,
-  "price_currency": "string or null if missing",
-  "missing_fields": ["list", "of", "missing", "fields"]
-}}
+Extract:
+- task: Short summary (e.g. 'Fix Window')
+- task_description: Clear, professional description of work needed
+- location: Address or location description
+- price_amount: Numeric amount
+- price_currency: Currency code or null
+- missing_fields: Array of fields that couldn't be extracted
 
 Rules:
 - If currency is '$', use 'USD'
 - If currency missing but amount exists, use 'GAS'
 - Do not invent data
 - If a field is missing, set it to null AND add it to missing_fields list
+
+Your response will be automatically parsed as JSON matching the schema provided.
 """
     
     try:
-        messages = [Message(role="user", content=extraction_prompt)]
-        response = await manager.chat(messages, model=ParalegalConfig.MODEL)
-        content = response.content.replace("```json", "").replace("```", "").strip()
+        # Use structured output with JSON schema validation
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "extraction",
+                "schema": EXTRACTION_SCHEMA,
+                "strict": True
+            }
+        }
+        
+        content = await ai_client.generate_text(
+            extraction_prompt, 
+            model=ParalegalConfig.MODEL,
+            response_format=response_format
+        )
+        
+        # Schema validation guarantees valid JSON
         return json.loads(content)
+        
     except Exception as e:
         print(f"❌ Extraction error: {str(e)}")
         return {

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { Shield, ArrowLeft, Gem } from 'lucide-react';
 
 export default function HowItWorks() {
     return (
@@ -9,14 +10,16 @@ export default function HowItWorks() {
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-12">
-                    <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                        GigSmartPay 🛡️
+                    <Link href="/" className="text-2xl font-bold text-white flex items-center gap-2 hover:text-cyan-400 transition-colors">
+                        <Gem className="w-6 h-6 text-cyan-400" />
+                        GigSmartPay
+                        <Shield className="w-5 h-5 text-cyan-400" />
                     </Link>
                     <Link
                         href="/"
-                        className="px-6 py-2 bg-slate-900 border border-slate-700 rounded-full hover:border-cyan-500 transition-colors text-sm"
+                        className="px-6 py-2 bg-slate-900 border border-slate-700 rounded-full hover:border-cyan-500 transition-colors text-sm flex items-center gap-2"
                     >
-                        ← Back to Home
+                        <ArrowLeft className="w-4 h-4" /> Back to Home
                     </Link>
                 </div>
 

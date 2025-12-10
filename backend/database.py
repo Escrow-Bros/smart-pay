@@ -273,42 +273,6 @@ class Database:
             data["verification_plan"] = json.loads(data["verification_plan"])
         
         return data
-    
-    def _filter_for_worker_view(self, job: Dict) -> Dict:
-        """
-        Filter job data for worker's public view (available jobs)
-        Hides: client_address details, internal verification data
-        """
-        public_fields = {
-            'job_id': job.get('job_id'),
-            'description': job.get('description'),
-            'location': job.get('location', ''),
-            'latitude': job.get('latitude', 0.0),
-            'longitude': job.get('longitude', 0.0),
-            'reference_photos': job.get('reference_photos', []),
-            'amount': job.get('amount'),
-            'status': job.get('status'),
-            'created_at': job.get('created_at'),
-        }
-        return {k: v for k, v in public_fields.items() if v is not None}
-    
-    def _filter_for_client_view(self, job: Dict) -> Dict:
-        """
-        Filter job data for client view
-        Shows: everything except internal verification details
-        """
-        # Clients can see everything except raw verification internals
-        filtered = job.copy()
-        # Simplify verification result to just verdict
-        if filtered.get('verification_result'):
-            vr = filtered['verification_result']
-            if isinstance(vr, dict):
-                filtered['verification_summary'] = {
-                    'verified': vr.get('verified', False),
-                    'verdict': vr.get('verdict', 'UNKNOWN'),
-                }
-                del filtered['verification_result']
-        return filtered
 
 
 # Singleton instance

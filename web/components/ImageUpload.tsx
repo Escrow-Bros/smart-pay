@@ -12,35 +12,129 @@ interface ImageUploadProps {
 export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
-
-        const MAX_SIZE_KB = 700;
-        const MAX_SIZE_BYTES = MAX_SIZE_KB * 1024;
-
+    const processFiles = (files: FileList) => {
         Array.from(files).forEach((file) => {
-            // Check file size
-            if (file.size > MAX_SIZE_BYTES) {
-                alert(`Image "${file.name}" is too large (${(file.size / 1024).toFixed(0)}KB). Please upload images smaller than ${MAX_SIZE_KB}KB.`);
-                return;
-            }
-
             // Check file type
             if (!file.type.startsWith('image/')) {
+                alert(`"${file.name}" is not an image file.`);
                 return;
             }
 
+            // Read and optimize ALL images
             const reader = new FileReader();
-            reader.onloadend = () => {
-                onAdd({
-                    file,
-                    preview: reader.result as string,
-                });
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    // Resize if too large (max 1600x1600 for good quality vs token balance)
+                    const MAX_DIMENSION = 1600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                        if (width > height) {
+                            height = Math.round((height * MAX_DIMENSION) / width);
+                            width = MAX_DIMENSION;
+                        } else {
+                            width = Math.round((width * MAX_DIMENSION) / height);
+                            height = MAX_DIMENSION;
+                        }
+                    }
+
+                    // Create canvas and compress
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        alert(`Failed to process "${file.name}". Please try again.`);
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to 85% quality JPEG
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) {
+                                // Blob creation failed, try fallback with toDataURL
+                                console.error(`Failed to create blob for "${file.name}". Attempting fallback...`);
+                                
+                                try {
+                                    // Fallback: convert data URL to Blob
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                    const response = fetch(dataUrl);
+                                    response.then(res => res.blob()).then(fallbackBlob => {
+                                        if (fallbackBlob) {
+                                            const optimizedFile = new File([fallbackBlob], file.name.replace(/\.\w+$/, '.jpg'), {
+                                                type: 'image/jpeg',
+                                            });
+                                            onAdd({
+                                                file: optimizedFile,
+                                                preview: dataUrl,
+                                            });
+                                            console.log(`✅ Processed ${file.name} using fallback method`);
+                                        } else {
+                                            throw new Error('Fallback blob creation failed');
+                                        }
+                                    }).catch(() => {
+                                        // Both methods failed
+                                        console.error(`Failed to process "${file.name}" - blob conversion failed.`);
+                                        alert(`Failed to process "${file.name}". The image may be too large or in an unsupported format.`);
+                                    });
+                                } catch (error) {
+                                    console.error(`Error processing "${file.name}":`, error);
+                                    alert(`Failed to process "${file.name}". Please try again.`);
+                                }
+                                return; // Terminate processing
+                            }
+                            
+                            // Success: blob created normally
+                            const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+                                type: 'image/jpeg',
+                            });
+                            const preview = canvas.toDataURL('image/jpeg', 0.85);
+                            
+                            // Show size reduction if significant
+                            const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                            const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                            if (file.size > blob.size * 1.5) {
+                                console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
+                            }
+                            
+                            onAdd({
+                                file: optimizedFile,
+                                preview,
+                            });
+                        },
+                        'image/jpeg',
+                        0.85
+                    );
+                };
+                img.onerror = () => {
+                    // Log error for diagnostics
+                    console.error(`Failed to load image: "${file.name}". The file may be corrupted or in an unsupported format.`);
+                    
+                    // Surface error to user
+                    alert(`Failed to load "${file.name}". The image may be corrupted or in an unsupported format.`);
+                    
+                    // Clean up: img element will be garbage collected
+                    // File is not added to the upload list, preventing silent failures
+                };
+                img.src = reader.result as string;
+            };
+            reader.onerror = () => {
+                console.error(`Failed to read file: "${file.name}".`);
+                alert(`Failed to read "${file.name}". Please try again.`);
             };
             reader.readAsDataURL(file);
         });
+    };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+        
+        processFiles(files);
+        
         // Reset input
         e.target.value = '';
     };
@@ -48,18 +142,12 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        // Simulate a change event for the dropped files
-        const dataTransfer = new DataTransfer();
-        Array.from(e.dataTransfer.files).forEach(file => dataTransfer.items.add(file));
-        const syntheticEvent = {
-            target: { files: dataTransfer.files, value: '' }
-        } as React.ChangeEvent<HTMLInputElement>;
-        handleFileChange(syntheticEvent);
+        processFiles(e.dataTransfer.files);
     };
 
     return (
-        <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-300 mb-3">
+        <div className="w-full">
+            <label className="block text-sm sm:text-base font-medium text-slate-300 mb-3 text-center">
                 Reference Photos
             </label>
 
@@ -67,7 +155,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-8 transition-all cursor-pointer ${isDragging
+                className={`border-2 border-dashed rounded-xl sm:rounded-2xl p-6 sm:p-8 md:p-10 transition-all cursor-pointer ${isDragging
                     ? 'border-cyan-500 bg-slate-900/50'
                     : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50'
                     }`}
@@ -80,38 +168,43 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         onChange={handleFileChange}
                         className="hidden"
                     />
-                    <svg className="h-10 w-10 text-slate-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-10 w-10 sm:h-12 sm:w-12 text-slate-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <p className="text-slate-400 text-sm text-center">
+                    <p className="text-slate-400 text-sm sm:text-base text-center mb-2">
                         Drop reference images here or click to select
                     </p>
-                    <p className="text-slate-600 text-xs mt-1">
-                        Supports JPG, PNG - Multiple files allowed
+                    <p className="text-slate-600 text-xs text-center">
+                        Auto-optimized for AI
                     </p>
                 </label>
             </div>
-            <p className="text-sm text-gray-400 mt-2">
-                ⚠️ Max size: 700KB per image
+            <p className="text-xs sm:text-sm text-gray-400 mt-3 text-center">
+                All images auto-resized to 1600px & compressed (85% quality) for optimal AI processing
             </p>
 
             {images.length > 0 && (
-                <div className="mt-3">
-                    <p className="text-sm font-medium text-slate-300 mb-3">Uploaded Images</p>
+                <div className="mt-4">
+                    <p className="text-sm font-medium text-slate-300 mb-3 text-center">
+                        Uploaded Images ({images.length})
+                    </p>
                     {images.map((img, index) => (
                         <div
                             key={index}
-                            className="flex items-center mt-3 p-3 bg-slate-900 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors"
+                            className="flex items-center mt-2 sm:mt-3 p-2.5 sm:p-3 bg-slate-900 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors"
                         >
                             <img
                                 src={img.preview}
                                 alt="Preview"
-                                className="h-10 w-10 object-cover rounded mr-3"
+                                className="h-9 w-9 sm:h-10 sm:w-10 object-cover rounded mr-2 sm:mr-3 flex-shrink-0"
                             />
-                            <span className="text-slate-300 text-sm flex-1 truncate">{img.file.name}</span>
+                            <span className="text-slate-300 text-xs sm:text-sm flex-1 truncate min-w-0">
+                                {img.file.name}
+                            </span>
                             <button
                                 onClick={() => onRemove(index)}
-                                className="ml-2 p-1 hover:bg-red-500/10 rounded transition-colors"
+                                className="ml-2 p-1.5 hover:bg-red-500/10 rounded transition-colors flex-shrink-0 min-h-[32px] min-w-[32px] touch-manipulation flex items-center justify-center"
+                                aria-label="Remove image"
                             >
                                 <svg className="h-4 w-4 text-red-400 hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
