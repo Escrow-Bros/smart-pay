@@ -293,7 +293,12 @@ class ConnectionManager:
         """Disconnect a client"""
         with self.lock:
             if client_id in self.active_connections:
-                self.active_connections[client_id].remove(websocket)
+                try:
+                    self.active_connections[client_id].remove(websocket)
+                except ValueError:
+                    # Already removed, ignore
+                    pass
+                # Delete key only if list is empty
                 if not self.active_connections[client_id]:
                     del self.active_connections[client_id]
         print(f"🔌 WebSocket disconnected: {client_id}")
@@ -307,8 +312,11 @@ class ConnectionManager:
         for connection in connections:
             try:
                 await connection.send_json(message)
+            except (WebSocketDisconnect, RuntimeError) as e:
+                print(f"⚠️  {type(e).__name__} sending to {client_id}: {e}")
+                disconnected.append(connection)
             except Exception as e:
-                print(f"⚠️  Error sending to {client_id}: {e}")
+                print(f"⚠️  Unexpected {type(e).__name__} sending to {client_id}: {e}")
                 disconnected.append(connection)
         
         # Clean up disconnected sockets
@@ -316,7 +324,11 @@ class ConnectionManager:
             with self.lock:
                 for conn in disconnected:
                     if conn in self.active_connections.get(client_id, []):
-                        self.active_connections[client_id].remove(conn)
+                        try:
+                            self.active_connections[client_id].remove(conn)
+                        except ValueError:
+                            # Already removed by another thread
+                            pass
 
 websocket_manager = ConnectionManager()
 
@@ -349,7 +361,7 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
                 await websocket_manager.broadcast_to_client(
                     job["worker_address"],
                     {
-                        "type": "JOB_STATUS_UPDATE",
+                        "type": "PAYMENT_PENDING",
                         "job_id": job_id,
                         "status": "PAYMENT_PENDING",
                         "message": f"Confirming transaction... (attempt {attempt + 1}/{max_attempts})",
@@ -437,8 +449,9 @@ async def websocket_endpoint(websocket: WebSocket, client_address: str):
     except WebSocketDisconnect:
         websocket_manager.disconnect(client_address, websocket)
     except Exception as e:
-        print(f"❌ WebSocket error for {client_address}: {e}")
+        print(f"❌ WebSocket {type(e).__name__} for {client_address}: {e}")
         websocket_manager.disconnect(client_address, websocket)
+        raise
 
 
 # ==================== HEALTH CHECK ====================
@@ -518,6 +531,17 @@ class GasEstimateRequest(BaseModel):
     client_address: str = Field(..., description="Client's Neo N3 address")
     amount: float = Field(..., gt=0, description="Job payment amount in GAS")
     operation: str = Field(..., description="Operation to estimate: 'create_job', 'assign_job', 'release_funds'")
+    
+    @field_validator('client_address')
+    @classmethod
+    def validate_neo_address(cls, v: str) -> str:
+        """Validate Neo N3 address format"""
+        if not v or not isinstance(v, str):
+            raise ValueError("Neo address must be a non-empty string")
+        # Neo N3 addresses start with 'N' and are 34 characters long
+        if not v.startswith('N') or len(v) != 34:
+            raise ValueError(f"Invalid Neo N3 address format: must start with 'N' and be 34 characters long")
+        return v
 
 
 @app.post("/api/wallet/estimate-gas")
@@ -577,7 +601,7 @@ async def estimate_gas_cost(request: GasEstimateRequest):
         
     except Exception as e:
         print(f"❌ Gas estimation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to estimate gas: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to estimate gas: {str(e)}") from e
 
 
 # ==================== JOB LISTING ENDPOINTS ====================

@@ -98,6 +98,13 @@ export class ApiClient {
                 operation 
             }),
         });
+        
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `HTTP ${res.status}: ${res.statusText}`);
+        }
+        
+        // Return full backend payload: { success, estimate }
         return res.json();
     }
 

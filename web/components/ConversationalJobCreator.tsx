@@ -66,17 +66,27 @@ export default function ConversationalJobCreator() {
   useEffect(() => {
     if (!state.walletAddress) return;
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/${state.walletAddress}`);
+    const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
+    const ws = new WebSocket(`${wsUrl}/ws/${state.walletAddress}`);
     
     ws.onopen = () => {
       console.log('WebSocket connected');
     };
     
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e);
+        return;
+      }
       console.log('WebSocket message:', data);
       
       if (data.type === 'JOB_COMPLETED') {
+        toast.dismiss(`job-${data.job_id}`);
         toast.success(`🎉 Job #${data.job_id} completed! Payment confirmed on blockchain.`, {
           duration: 5000,
           position: 'top-right',
@@ -85,6 +95,12 @@ export default function ConversationalJobCreator() {
         toast.loading(`⏳ Job #${data.job_id} payment pending confirmation...`, {
           id: `job-${data.job_id}`,
           duration: 15000,
+        });
+      } else if (data.type === 'PAYMENT_TIMEOUT') {
+        toast.dismiss(`job-${data.job_id}`);
+        toast(`⚠️ Job #${data.job_id}: ${data.message}`, {
+          duration: 8000,
+          icon: '⏱️',
         });
       } else if (data.type === 'JOB_STATUS_UPDATE') {
         toast.dismiss(`job-${data.job_id}`);
@@ -223,33 +239,40 @@ export default function ConversationalJobCreator() {
       console.log(`Converting ${extractedData.price_amount} USD to ${paymentAmount.toFixed(2)} GAS`);
     }
 
+    // Validate payment amount before API call
+    if (!isFinite(paymentAmount) || paymentAmount <= 0) {
+      toast.error('Invalid payment amount. Please check the job price.');
+      return;
+    }
+
     // Gas estimation check
     setIsCheckingGas(true);
     try {
-      const gasEstimate = await apiClient.estimateGas(state.walletAddress, paymentAmount);
+      const response = await apiClient.estimateGas(state.walletAddress, paymentAmount);
       
-      if (!gasEstimate.sufficient) {
+      // Extract nested estimate object
+      const estimate = response.estimate;
+      
+      if (!estimate.sufficient) {
         toast.error(
-          `Insufficient balance! You need ${gasEstimate.shortfall.toFixed(4)} more GAS.\n` +
-          `Required: ${gasEstimate.total_gas_needed.toFixed(4)} GAS (${gasEstimate.breakdown})\n` +
-          `Available: ${gasEstimate.current_balance.toFixed(4)} GAS`,
+          `Insufficient balance! You need ${estimate.shortfall.toFixed(4)} more GAS.\n` +
+          `Required: ${estimate.total_required.toFixed(4)} GAS (${estimate.job_amount} + ${estimate.platform_fee} fee + ${estimate.operation_cost} tx)\n` +
+          `Available: ${estimate.current_balance.toFixed(4)} GAS`,
           { duration: 8000 }
         );
-        setIsCheckingGas(false);
         return;
       }
       
-      toast.success(
-        `Balance verified! ✓ ${gasEstimate.breakdown}`,
-        { duration: 3000 }
-      );
+      // Balance is sufficient, proceed silently
+      console.log('Balance verified:', estimate.message);
     } catch (error) {
       console.error('Gas estimation error:', error);
-      toast.error('Failed to verify balance. Please try again.');
-      setIsCheckingGas(false);
+      const message = error instanceof Error ? error.message : 'Failed to verify balance. Please try again.';
+      toast.error(message);
       return;
+    } finally {
+      setIsCheckingGas(false);
     }
-    setIsCheckingGas(false);
 
     setIsCreating(true);
 
@@ -446,19 +469,6 @@ export default function ConversationalJobCreator() {
             </button>
           </div>
         )}
-
-        {/* Toast Container */}
-        <Toaster 
-          position="top-right"
-          toastOptions={{
-            className: '',
-            style: {
-              background: '#1e293b',
-              color: '#fff',
-              border: '1px solid #334155',
-            },
-          }}
-        />
 
         {/* Chat Input */}
         <ChatInput
