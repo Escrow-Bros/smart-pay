@@ -8,7 +8,7 @@ load_dotenv()
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
@@ -274,6 +274,65 @@ load_arbiter_whitelist()
 print(f"✅ Loaded {len(ARBITER_WHITELIST)} authorized arbiters: {ARBITER_WHITELIST}")
 eye_agent = UniversalEyeAgent()
 
+# ==================== WEBSOCKET CONNECTION MANAGER ====================
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates"""
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = defaultdict(list)
+        self.lock = Lock()
+    
+    async def connect(self, client_id: str, websocket: WebSocket):
+        """Connect a client to receive updates"""
+        await websocket.accept()
+        with self.lock:
+            self.active_connections[client_id].append(websocket)
+        print(f"🔌 WebSocket connected: {client_id} (total: {len(self.active_connections[client_id])})")
+    
+    def disconnect(self, client_id: str, websocket: WebSocket):
+        """Disconnect a client"""
+        with self.lock:
+            if client_id in self.active_connections:
+                try:
+                    self.active_connections[client_id].remove(websocket)
+                except ValueError:
+                    # Already removed, ignore
+                    pass
+                # Delete key only if list is empty
+                if not self.active_connections[client_id]:
+                    del self.active_connections[client_id]
+        print(f"🔌 WebSocket disconnected: {client_id}")
+    
+    async def broadcast_to_client(self, client_id: str, message: dict):
+        """Send message to all connections for a specific client"""
+        with self.lock:
+            connections = self.active_connections.get(client_id, []).copy()
+        
+        disconnected = []
+        for connection in connections:
+            try:
+                await connection.send_json(message)
+            except (WebSocketDisconnect, RuntimeError) as e:
+                print(f"⚠️  {type(e).__name__} sending to {client_id}: {e}")
+                disconnected.append(connection)
+            # Intentionally catch all exceptions to handle unexpected send errors gracefully
+            except Exception as e:  # noqa: BLE001
+                print(f"⚠️  Unexpected {type(e).__name__} sending to {client_id}: {e}")
+                disconnected.append(connection)
+        
+        # Clean up disconnected sockets
+        if disconnected:
+            with self.lock:
+                for conn in disconnected:
+                    if conn in self.active_connections.get(client_id, []):
+                        try:
+                            self.active_connections[client_id].remove(conn)
+                        except ValueError:
+                            # Already removed by another thread
+                            pass
+
+websocket_manager = ConnectionManager()
+
 # ==================== BACKGROUND TASK: TX MONITORING ====================
 
 async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attempts: int = 10):
@@ -281,8 +340,15 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
     Background task to monitor blockchain transaction confirmation.
     Polls the blockchain every 15 seconds for up to 2.5 minutes.
     Updates job status from PAYMENT_PENDING to COMPLETED once confirmed.
+    Broadcasts updates via WebSocket to connected clients.
     """
     print(f"🔄 Starting transaction monitor for job #{job_id}, tx: {tx_hash}")
+    
+    # Get job to find client and worker addresses for WebSocket notifications
+    job = db.get_job(job_id)
+    if not job:
+        print(f"⚠️  Job #{job_id} not found, cannot monitor")
+        return
     
     for attempt in range(max_attempts):
         await asyncio.sleep(15)  # Wait 15 seconds between checks
@@ -291,10 +357,38 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
             # Check on-chain job status
             job_status = await mcp.get_job_status(job_id)
             
+            # Broadcast pending status update via WebSocket
+            if job.get("worker_address"):
+                await websocket_manager.broadcast_to_client(
+                    job["worker_address"],
+                    {
+                        "type": "PAYMENT_PENDING",
+                        "job_id": job_id,
+                        "status": "PAYMENT_PENDING",
+                        "message": f"Confirming transaction... (attempt {attempt + 1}/{max_attempts})",
+                        "tx_hash": tx_hash
+                    }
+                )
+            
             if job_status.get("status_name") == "COMPLETED":
                 print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 15}s")
                 # Update database to COMPLETED
                 db.complete_job(job_id=job_id)
+                
+                # Broadcast completion to both client and worker
+                completion_message = {
+                    "type": "JOB_COMPLETED",
+                    "job_id": job_id,
+                    "status": "COMPLETED",
+                    "message": "Payment confirmed! Job completed successfully.",
+                    "tx_hash": tx_hash
+                }
+                
+                if job.get("worker_address"):
+                    await websocket_manager.broadcast_to_client(job["worker_address"], completion_message)
+                if job.get("client_address"):
+                    await websocket_manager.broadcast_to_client(job["client_address"], completion_message)
+                
                 return
             
             print(f"⏳ Job #{job_id} still pending... (attempt {attempt + 1}/{max_attempts})")
@@ -306,6 +400,65 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
     # If we get here, transaction didn't confirm in time
     print(f"⚠️  WARNING: Job #{job_id} transaction {tx_hash} not confirmed after {max_attempts * 15}s")
     print("   Job remains in PAYMENT_PENDING status. Manual verification recommended.")
+    
+    # Notify worker of timeout
+    if job.get("worker_address"):
+        await websocket_manager.broadcast_to_client(
+            job["worker_address"],
+            {
+                "type": "PAYMENT_TIMEOUT",
+                "job_id": job_id,
+                "status": "PAYMENT_PENDING",
+                "message": "Transaction confirmation taking longer than expected. Please check status manually.",
+                "tx_hash": tx_hash
+            }
+        )
+
+
+# ==================== WEBSOCKET ====================
+
+@app.websocket("/ws/{client_address}")
+async def websocket_endpoint(websocket: WebSocket, client_address: str):
+    """
+    WebSocket endpoint for real-time job updates.
+    Clients connect with their Neo address to receive:
+    - Job status changes
+    - Payment confirmations
+    - Dispute resolutions
+    - System notifications
+    """
+    await websocket_manager.connect(client_address, websocket)
+    try:
+        while True:
+            # Keep connection alive and handle incoming messages
+            data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_json(
+                    {"type": "error", "message": "Invalid JSON payload"}
+                )
+                continue
+            
+            # Handle ping/pong for connection health
+            if message.get("type") == "ping":
+                await websocket.send_json({"type": "pong", "timestamp": time.time()})
+            
+            # Handle subscription requests
+            elif message.get("type") == "subscribe":
+                job_ids = message.get("job_ids", [])
+                await websocket.send_json({
+                    "type": "subscribed",
+                    "job_ids": job_ids,
+                    "message": f"Subscribed to updates for {len(job_ids)} jobs"
+                })
+    
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(client_address, websocket)
+    except Exception as e:
+        print(f"❌ WebSocket {type(e).__name__} for {client_address}: {e}")
+        websocket_manager.disconnect(client_address, websocket)
+        raise
 
 
 # ==================== HEALTH CHECK ====================
@@ -378,6 +531,96 @@ async def get_wallet_balance(address: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class GasEstimateRequest(BaseModel):
+    """Request model for gas estimation"""
+    client_address: str = Field(..., description="Client's Neo N3 address")
+    amount: float = Field(..., gt=0, description="Job payment amount in GAS")
+    operation: str = Field(..., description="Operation to estimate: 'create_job', 'assign_job', 'release_funds'")
+    
+    @field_validator('client_address')
+    @classmethod
+    def validate_neo_address(cls, v: str) -> str:
+        """Validate Neo N3 address format"""
+        if not v or not isinstance(v, str):
+            raise ValueError("Neo address must be a non-empty string")
+        # Neo N3 addresses start with 'N' and are 34 characters long
+        if not v.startswith('N') or len(v) != 34:
+            raise ValueError("Invalid Neo N3 address format: must start with 'N' and be 34 characters long")
+        return v
+
+
+@app.post("/api/wallet/estimate-gas")
+async def estimate_gas_cost(request: GasEstimateRequest):
+    """
+    Pre-flight check: Estimate total GAS cost for blockchain operation.
+    Helps clients ensure they have sufficient balance before creating jobs.
+    
+    Returns:
+        - operation_cost: GAS needed for the blockchain transaction
+        - platform_fee: Platform fee (5% of job amount)
+        - total_required: Total GAS needed (amount + fee + operation cost)
+        - current_balance: Client's current GAS balance
+        - sufficient: Whether client has enough GAS
+    """
+    try:
+        # Get current balance
+        rpc_url = os.getenv("NEO_TESTNET_RPC", "https://testnet1.neo.coz.io:443/")
+        current_balance = get_gas_balance(rpc_url, request.client_address)
+        
+        # Platform fee calculation (5%)
+        platform_fee = round(request.amount * 0.05, 2)
+        
+        # Estimate operation cost (blockchain transaction fees)
+        # These are rough estimates based on typical Neo N3 transaction costs
+        operation_costs = {
+            "create_job": 0.02,      # ~0.02 GAS for contract invocation
+            "assign_job": 0.01,      # ~0.01 GAS for assignment
+            "release_funds": 0.015,  # ~0.015 GAS for release
+            "dispute": 0.01,         # ~0.01 GAS for dispute creation
+            "resolve": 0.015         # ~0.015 GAS for resolution
+        }
+        
+        # Reject unsupported operations instead of silently defaulting
+        if request.operation not in operation_costs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported operation for gas estimation: {request.operation!r}",
+            )
+        operation_cost = operation_costs[request.operation]
+        
+        # Total required = job amount + platform fee + transaction cost
+        total_required = request.amount + platform_fee + operation_cost
+        
+        # Check if sufficient
+        sufficient = current_balance >= total_required
+        shortfall = max(0, total_required - current_balance)
+        
+        return {
+            "success": True,
+            "estimate": {
+                "operation": request.operation,
+                "job_amount": round(request.amount, 2),
+                "platform_fee": platform_fee,
+                "operation_cost": operation_cost,
+                "total_required": round(total_required, 4),
+                "current_balance": round(current_balance, 4),
+                "sufficient": sufficient,
+                "shortfall": round(shortfall, 4) if not sufficient else 0,
+                "message": "Sufficient balance" if sufficient else f"Need {round(shortfall, 4)} more GAS"
+            }
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        print(f"❌ Gas estimation error: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to estimate gas: {e!s}",
+        ) from e
 
 
 # ==================== JOB LISTING ENDPOINTS ====================

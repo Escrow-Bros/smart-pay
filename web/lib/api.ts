@@ -88,6 +88,26 @@ export class ApiClient {
         return res.json();
     }
 
+    async estimateGas(clientAddress: string, amount: number, operation: string = 'create_job') {
+        const res = await fetch(`${this.baseUrl}/api/wallet/estimate-gas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                client_address: clientAddress, 
+                amount, 
+                operation 
+            }),
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `HTTP ${res.status}: ${res.statusText}`);
+        }
+        
+        // Return full backend payload: { success, estimate }
+        return res.json();
+    }
+
     async uploadProofImage(file: File): Promise<string> {
         const formData = new FormData();
         formData.append('file', file);
