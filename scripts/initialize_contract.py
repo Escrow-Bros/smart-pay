@@ -8,6 +8,10 @@ from neo3.network.payloads.verification import Signer
 from neo3.core import types
 from neo3.wallet import utils as wallet_utils
 
+# Add scripts directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.ssl_helpers import create_testnet_ssl_context
+
 
 async def main():
     root = Path(__file__).resolve().parents[1]
@@ -35,6 +39,10 @@ async def main():
         print("            AGENT_ADDR, TREASURY_ADDR, VAULT_CONTRACT_HASH")
         sys.exit(1)
     
+    # Create SSL context for testnet (scoped, not global)
+    ssl_context = create_testnet_ssl_context()
+    print(f"🔒 SSL Context: verify_mode={ssl_context.verify_mode}")
+    
     # Load deployer account
     deployer = Account.from_wif(deployer_wif)
     print(f"🔑 Deployer: {deployer.address}")
@@ -53,7 +61,8 @@ async def main():
     print(f"   1. set_owner({deployer_addr})")
     print(f"   2. set_agent({agent_addr})")
     print(f"   3. set_treasury({treasury_addr})")
-    print(f"   4. set_fee_bps(500)  # 5% fee")
+    print(f"   4. set_arbiter({agent_addr})  # Use agent as arbiter")
+    print("   5. set_fee_bps(500)  # 5% fee")
     print()
     
     # Setup ChainFacade
@@ -70,7 +79,7 @@ async def main():
             vault.call_function("set_owner", [deployer_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx1}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
         # Step 2: Set Agent
@@ -79,7 +88,7 @@ async def main():
             vault.call_function("set_agent", [agent_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx2}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
         # Step 3: Set Treasury
@@ -88,25 +97,35 @@ async def main():
             vault.call_function("set_treasury", [treasury_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx3}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
-        # Step 4: Set Fee (500 basis points = 5%)
-        print("\n4️⃣  Setting fee to 5%...")
+        # Step 4: Set Arbiter (use same agent address for MVP)
+        print("\n4️⃣  Setting arbiter...")
         tx4 = await facade.invoke_fast(
-            vault.call_function("set_fee_bps", [500])
+            vault.call_function("set_arbiter", [agent_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx4}")
-        print(f"   ⏳ Waiting for confirmation...")
+        print("   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
-        print(f"\n🎉 Contract initialization complete!")
-        print(f"\n📋 Contract State:")
+        # Step 5: Set Fee (500 basis points = 5%)
+        print("\n5️⃣  Setting fee to 5%...")
+        tx5 = await facade.invoke_fast(
+            vault.call_function("set_fee_bps", [500])
+        )
+        print(f"   ✅ Transaction sent: {tx5}")
+        print("   ⏳ Waiting for confirmation...")
+        await asyncio.sleep(20)
+        
+        print("\n🎉 Contract initialization complete!")
+        print("\n📋 Contract State:")
         print(f"   Owner: {deployer_addr}")
         print(f"   Agent: {agent_addr}")
         print(f"   Treasury: {treasury_addr}")
-        print(f"   Fee: 5% (500 bps)")
-        print(f"\n✅ Ready to create jobs!")
+        print(f"   Arbiter: {agent_addr}  (same as agent)")
+        print("   Fee: 5% (500 bps)")
+        print("\n✅ Ready to create jobs and resolve disputes!")
         print(f"🔍 View on Dora: https://testnet.neotube.io/contract/{contract_hash}")
         
     except Exception as e:

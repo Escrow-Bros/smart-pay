@@ -34,6 +34,33 @@ export interface UploadedImage {
     preview: string;
 }
 
+export interface DisputeDict {
+    dispute_id: number;
+    job_id: number;
+    raised_by: string;
+    raised_at: string;
+    reason: string;
+    ai_verdict?: Record<string, any> | null;
+    confidence_score?: number | null;
+    evidence_photos?: string[];
+    status: 'PENDING' | 'UNDER_REVIEW' | 'RESOLVED';
+    resolved_by?: string | null;
+    resolved_at?: string | null;
+    resolution?: 'APPROVED' | 'REFUNDED' | null;
+    resolution_notes?: string | null;
+    transaction_hash?: string | null;
+    // Job details (joined)
+    description?: string;
+    client_address?: string;
+    worker_address?: string;
+    amount?: number;
+    location?: string;
+    job_status?: string;
+    reference_photos?: string[];
+    proof_photos?: string[];
+    verification_result?: Record<string, any>;
+}
+
 export interface GlobalState {
     userMode: UserMode | null;
     currentUser: string | null;

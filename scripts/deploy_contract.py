@@ -9,6 +9,10 @@ from neo3.network.payloads.verification import Signer
 from neo3.core import types
 from neo3.api import noderpc
 
+# Add scripts directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.ssl_helpers import create_testnet_ssl_context
+
 
 async def main():
     root = Path(__file__).resolve().parents[1]
@@ -29,6 +33,10 @@ async def main():
     if not rpc or not deployer_wif:
         print("❌ Missing NEO_TESTNET_RPC or DEPLOYER_WIF in .env")
         sys.exit(1)
+    
+    # Create SSL context for testnet (scoped, not global)
+    ssl_context = create_testnet_ssl_context()
+    print(f"🔒 SSL Context: {ssl_context.check_hostname=}, {ssl_context.verify_mode=}")
     
     # Load deployer account
     deployer = Account.from_wif(deployer_wif)
