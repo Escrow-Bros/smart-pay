@@ -9,6 +9,7 @@ import LocationPicker from '@/components/LocationPicker';
 import { apiClient } from '@/lib/api';
 import { usdToGas, formatGasWithUSD } from '@/lib/currency';
 import type { UploadedImage } from '@/lib/types';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface Message {
   id: string;
@@ -49,15 +50,65 @@ export default function ConversationalJobCreator() {
   });
   const [isComplete, setIsComplete] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isCheckingGas, setIsCheckingGas] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pendingMessageRef = useRef<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    if (!state.walletAddress) return;
+
+    const ws = new WebSocket(`ws://localhost:8000/ws/${state.walletAddress}`);
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+    };
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('WebSocket message:', data);
+      
+      if (data.type === 'JOB_COMPLETED') {
+        toast.success(`🎉 Job #${data.job_id} completed! Payment confirmed on blockchain.`, {
+          duration: 5000,
+          position: 'top-right',
+        });
+      } else if (data.type === 'PAYMENT_PENDING') {
+        toast.loading(`⏳ Job #${data.job_id} payment pending confirmation...`, {
+          id: `job-${data.job_id}`,
+          duration: 15000,
+        });
+      } else if (data.type === 'JOB_STATUS_UPDATE') {
+        toast.dismiss(`job-${data.job_id}`);
+        toast(`📋 Job #${data.job_id}: ${data.message}`, {
+          duration: 4000,
+          icon: 'ℹ️',
+        });
+      }
+    };
+    
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+    
+    wsRef.current = ws;
+    
+    return () => {
+      ws.close();
+    };
+  }, [state.walletAddress]);
 
   const handleSendMessage = useCallback(async (userMessage: string, imageUploaded?: boolean) => {
     if (isLoading) {
@@ -160,21 +211,49 @@ export default function ConversationalJobCreator() {
 
   const handleCreateJob = async () => {
     if (!isComplete || !state.walletAddress) {
-      alert('Please complete all fields and connect your wallet');
+      toast.error('Please complete all fields and connect your wallet');
       return;
     }
+
+    // Convert USD to GAS if needed
+    let paymentAmount = extractedData.price_amount || 5.0;
+    
+    if (extractedData.price_currency?.toUpperCase() === 'USD') {
+      paymentAmount = usdToGas(paymentAmount);
+      console.log(`Converting ${extractedData.price_amount} USD to ${paymentAmount.toFixed(2)} GAS`);
+    }
+
+    // Gas estimation check
+    setIsCheckingGas(true);
+    try {
+      const gasEstimate = await apiClient.estimateGas(state.walletAddress, paymentAmount);
+      
+      if (!gasEstimate.sufficient) {
+        toast.error(
+          `Insufficient balance! You need ${gasEstimate.shortfall.toFixed(4)} more GAS.\n` +
+          `Required: ${gasEstimate.total_gas_needed.toFixed(4)} GAS (${gasEstimate.breakdown})\n` +
+          `Available: ${gasEstimate.current_balance.toFixed(4)} GAS`,
+          { duration: 8000 }
+        );
+        setIsCheckingGas(false);
+        return;
+      }
+      
+      toast.success(
+        `Balance verified! ✓ ${gasEstimate.breakdown}`,
+        { duration: 3000 }
+      );
+    } catch (error) {
+      console.error('Gas estimation error:', error);
+      toast.error('Failed to verify balance. Please try again.');
+      setIsCheckingGas(false);
+      return;
+    }
+    setIsCheckingGas(false);
 
     setIsCreating(true);
 
     try {
-      // Convert USD to GAS if needed
-      let paymentAmount = extractedData.price_amount || 5.0;
-      
-      if (extractedData.price_currency?.toUpperCase() === 'USD') {
-        // Convert USD to GAS
-        paymentAmount = usdToGas(paymentAmount);
-        console.log(`Converting ${extractedData.price_amount} USD to ${paymentAmount.toFixed(2)} GAS`);
-      }
 
       // Upload images to IPFS with individual error handling
       const uploadResults = await Promise.allSettled(
@@ -192,7 +271,10 @@ export default function ConversationalJobCreator() {
           throw new Error('All images failed to upload. Please try again.');
         }
         // Continue with successfully uploaded images
-        alert(`Warning: ${failures.length} of ${state.clientUploadedImages.length} images failed to upload. Continuing with ${ipfsUrls.length} successful uploads.`);
+        toast(`${failures.length} of ${state.clientUploadedImages.length} images failed to upload. Continuing with ${ipfsUrls.length} successful uploads.`, {
+          icon: '⚠️',
+          duration: 5000,
+        });
       }
 
       // Create job
@@ -220,7 +302,10 @@ export default function ConversationalJobCreator() {
           ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)` 
           : `${paymentAmount.toFixed(2)} GAS`;
           
-        alert(`Job created successfully! ID: ${result.job.job_id}\nPayment: ${displayAmount}`);
+        toast.success(
+          `Job created successfully! ID: ${result.job.job_id}\nPayment: ${displayAmount}`,
+          { duration: 5000 }
+        );
         
         // Clear session
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`, {
@@ -248,7 +333,7 @@ export default function ConversationalJobCreator() {
     } catch (error) {
       console.error('Create error:', error);
       const message = error instanceof Error ? error.message : 'Failed to create job. Please try again.';
-      alert(message);
+      toast.error(message, { duration: 5000 });
     } finally {
       setIsCreating(false);
     }
@@ -354,13 +439,26 @@ export default function ConversationalJobCreator() {
           <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 bg-gradient-to-r from-green-500/10 to-cyan-500/10 border-t border-green-500/30">
             <button
               onClick={handleCreateJob}
-              disabled={isCreating}
+              disabled={isCreating || isCheckingGas}
               className="w-full bg-gradient-to-r from-green-500 to-cyan-600 text-white font-semibold py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl text-sm sm:text-base hover:shadow-lg hover:shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] touch-manipulation"
             >
-              {isCreating ? 'Creating Job...' : '✓ Create Job on Blockchain'}
+              {isCheckingGas ? '🔍 Checking Balance...' : isCreating ? '⏳ Creating Job...' : '✓ Create Job on Blockchain'}
             </button>
           </div>
         )}
+
+        {/* Toast Container */}
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            className: '',
+            style: {
+              background: '#1e293b',
+              color: '#fff',
+              border: '1px solid #334155',
+            },
+          }}
+        />
 
         {/* Chat Input */}
         <ChatInput
