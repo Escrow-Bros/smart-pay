@@ -5,7 +5,7 @@
         "methods": [
             {
                 "name": "_deploy",
-                "offset": 1693,
+                "offset": 2613,
                 "parameters": [
                     {
                         "type": "Any",
@@ -242,11 +242,58 @@
                 ],
                 "safe": false,
                 "returntype": "Boolean"
+            },
+            {
+                "name": "set_arbiter",
+                "offset": 1693,
+                "parameters": [
+                    {
+                        "type": "Hash160",
+                        "name": "arbiter"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "get_arbiter",
+                "offset": 1779,
+                "parameters": [],
+                "safe": false,
+                "returntype": "Hash160"
+            },
+            {
+                "name": "refund_client",
+                "offset": 1831,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
+            },
+            {
+                "name": "arbiter_resolve",
+                "offset": 2155,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    },
+                    {
+                        "type": "Boolean",
+                        "name": "approve_worker"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Boolean"
             }
         ],
         "events": [
             {
-                "name": "FundsReleased",
+                "name": "WorkerAssigned",
                 "parameters": [
                     {
                         "name": "job_id",
@@ -255,17 +302,43 @@
                     {
                         "name": "worker",
                         "type": "Hash160"
-                    },
+                    }
+                ]
+            },
+            {
+                "name": "FundsRefunded",
+                "parameters": [
                     {
-                        "name": "worker_amount",
+                        "name": "job_id",
                         "type": "Integer"
                     },
                     {
-                        "name": "fee_amount",
+                        "name": "client",
+                        "type": "Hash160"
+                    },
+                    {
+                        "name": "amount",
                         "type": "Integer"
                     },
                     {
-                        "name": "treasury",
+                        "name": "arbiter",
+                        "type": "Hash160"
+                    }
+                ]
+            },
+            {
+                "name": "DisputeResolved",
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "resolution",
+                        "type": "String"
+                    },
+                    {
+                        "name": "arbiter",
                         "type": "Hash160"
                     }
                 ]
@@ -292,7 +365,7 @@
                 ]
             },
             {
-                "name": "WorkerAssigned",
+                "name": "FundsReleased",
                 "parameters": [
                     {
                         "name": "job_id",
@@ -300,6 +373,18 @@
                     },
                     {
                         "name": "worker",
+                        "type": "Hash160"
+                    },
+                    {
+                        "name": "worker_amount",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "fee_amount",
+                        "type": "Integer"
+                    },
+                    {
+                        "name": "treasury",
                         "type": "Hash160"
                     }
                 ]

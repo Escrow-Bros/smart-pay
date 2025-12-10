@@ -19,6 +19,7 @@ STATUS_OPEN = 1
 STATUS_LOCKED = 2
 STATUS_COMPLETED = 3
 STATUS_DISPUTED = 4
+STATUS_REFUNDED = 5
 
 # Events
 on_job_created = CreateNewEvent(
@@ -48,6 +49,25 @@ on_funds_released = CreateNewEvent(
         ('treasury', UInt160)
     ],
     'FundsReleased'
+)
+
+on_funds_refunded = CreateNewEvent(
+    [
+        ('job_id', int),
+        ('client', UInt160),
+        ('amount', int),
+        ('arbiter', UInt160)
+    ],
+    'FundsRefunded'
+)
+
+on_dispute_resolved = CreateNewEvent(
+    [
+        ('job_id', int),
+        ('resolution', str),
+        ('arbiter', UInt160)
+    ],
+    'DisputeResolved'
 )
 
 def _key(field: bytes, job_id: int) -> bytes:
@@ -319,3 +339,117 @@ def release_funds(job_id: int) -> bool:
     on_funds_released(job_id, worker, worker_amount, fee_amount, treasury)
     
     return True
+
+@public
+def set_arbiter(arbiter: UInt160) -> bool:
+    """
+    Set arbiter address for dispute resolution.
+    Only callable by contract owner.
+    Arbiter can resolve disputed jobs by approving payment or refunding client.
+    
+    :param arbiter: Address of the arbiter wallet
+    :return: True if successful
+    """
+    owner = get_uint160(b'owner')
+    if not check_witness(owner):
+        return False
+    
+    put_uint160(b'arbiter_addr', arbiter)
+    return True
+
+@public
+def get_arbiter() -> UInt160:
+    """Get current arbiter address"""
+    return get_uint160(b'arbiter_addr')
+
+@public
+def refund_client(job_id: int) -> bool:
+    """
+    Refund locked funds to client after dispute resolution.
+    Only callable by arbiter.
+    Full refund - no platform fee on failed jobs.
+    
+    :param job_id: The job to refund
+    :return: True if successful
+    """
+    # Verify arbiter signature
+    arbiter = get_uint160(b'arbiter_addr')
+    if not check_witness(arbiter):
+        return False
+    
+    # Check job status - must be LOCKED or DISPUTED
+    status = get_int(_key(b"job_status", job_id))
+    if status != STATUS_LOCKED and status != STATUS_DISPUTED:
+        return False
+    
+    # Get job details
+    client = get_uint160(_key(b"job_client", job_id))
+    amount = get_int(_key(b"job_required", job_id))
+    
+    # Transfer full amount back to client (no fee on refunds)
+    success = GasToken.transfer(executing_script_hash, client, amount, None)
+    if not success:
+        return False
+    
+    # Mark job as refunded
+    put_int(_key(b"job_status", job_id), STATUS_REFUNDED)
+    
+    # Emit events
+    on_funds_refunded(job_id, client, amount, arbiter)
+    on_dispute_resolved(job_id, 'REFUNDED', arbiter)
+    
+    return True
+
+@public
+def arbiter_resolve(job_id: int, approve_worker: bool) -> bool:
+    """
+    Arbiter manually resolves a disputed job.
+    This is the human override for AI decisions.
+    
+    :param job_id: The job to resolve
+    :param approve_worker: True to pay worker, False to refund client
+    :return: True if successful
+    """
+    # Verify arbiter signature
+    arbiter = get_uint160(b'arbiter_addr')
+    if not check_witness(arbiter):
+        return False
+    
+    # Check job status - must be LOCKED or DISPUTED
+    status = get_int(_key(b"job_status", job_id))
+    if status != STATUS_LOCKED and status != STATUS_DISPUTED:
+        return False
+    
+    if approve_worker:
+        # Arbiter rules in favor of WORKER
+        # Get job details
+        worker = get_uint160(_key(b"job_worker", job_id))
+        amount = get_int(_key(b"job_required", job_id))
+        treasury = get_uint160(b'treasury_addr')
+        fee_bps = get_int(b'fee_bps')
+        
+        # Calculate fee and worker payment
+        fee_amount = amount * fee_bps // 10000
+        worker_amount = amount - fee_amount
+        
+        # Transfer to worker
+        success_worker = GasToken.transfer(executing_script_hash, worker, worker_amount, None)
+        if not success_worker:
+            return False
+        
+        # Transfer fee to treasury
+        success_treasury = GasToken.transfer(executing_script_hash, treasury, fee_amount, None)
+        if not success_treasury:
+            return False
+        
+        # Mark job as completed
+        put_int(_key(b"job_status", job_id), STATUS_COMPLETED)
+        
+        # Emit events
+        on_funds_released(job_id, worker, worker_amount, fee_amount, treasury)
+        on_dispute_resolved(job_id, 'APPROVED', arbiter)
+        
+        return True
+    
+    # Arbiter rules in favor of CLIENT (Refund)
+    return refund_client(job_id)

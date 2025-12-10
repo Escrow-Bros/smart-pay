@@ -29,13 +29,15 @@ STATUS_OPEN = 1
 STATUS_LOCKED = 2
 STATUS_COMPLETED = 3
 STATUS_DISPUTED = 4
+STATUS_REFUNDED = 5
 
 STATUS_NAMES = {
     0: "NONE",
     1: "OPEN",
     2: "LOCKED",
     3: "COMPLETED",
-    4: "DISPUTED"
+    4: "DISPUTED",
+    5: "REFUNDED"
 }
 
 
@@ -393,3 +395,126 @@ class NeoMCP:
             raise
         except Exception as e:
             raise TransactionFailedException(f"Failed to release funds: {str(e)}")
+    
+    async def refund_client_on_chain(self, job_id: int, arbiter_role: str = 'agent') -> Dict[str, Any]:
+        """
+        Refund locked funds to client after dispute resolution.
+        Only callable by arbiter role.
+        
+        Args:
+            job_id: Job to refund
+            arbiter_role: Role with arbiter permissions (default: 'agent')
+        
+        Returns:
+            Dict with transaction result
+        """
+        # Pre-validation: Get job details
+        job_details = await self.get_job_details(job_id)
+        
+        # Check job is LOCKED or DISPUTED
+        if job_details['status_code'] not in [STATUS_LOCKED, STATUS_DISPUTED]:
+            return {
+                "success": False,
+                "error": f"Job must be LOCKED or DISPUTED to refund. Current: {job_details['status_name']}",
+                "job_id": job_id,
+                "current_status": job_details['status_name']
+            }
+        
+        # Get arbiter facade
+        facade = self._get_facade(arbiter_role)
+        
+        try:
+            tx_hash = await facade.invoke_fast(
+                self.contract.call_function("refund_client", [job_id])
+            )
+            
+            return {
+                "success": True,
+                "tx_hash": str(tx_hash),
+                "job_id": job_id,
+                "client": job_details['client_address'],
+                "refunded_amount_gas": job_details['amount_locked'] / 100_000_000,
+                "note": "Transaction sent. Full refund (no fee) will be processed.",
+                "job_details": job_details
+            }
+        
+        except TransactionFailedException:
+            raise
+        except Exception as e:
+            raise TransactionFailedException(f"Failed to refund client: {str(e)}")
+    
+    async def arbiter_resolve_on_chain(
+        self,
+        job_id: int,
+        approve_worker: bool,
+        arbiter_role: str = 'agent'
+    ) -> Dict[str, Any]:
+        """
+        Arbiter manually resolves a disputed job.
+        This is the human override for AI decisions.
+        
+        Args:
+            job_id: Job to resolve
+            approve_worker: True to pay worker, False to refund client
+            arbiter_role: Role with arbiter permissions (default: 'agent')
+        
+        Returns:
+            Dict with transaction result and payment breakdown
+        """
+        # Pre-validation: Get job details
+        job_details = await self.get_job_details(job_id)
+        
+        # Check job is LOCKED or DISPUTED
+        if job_details['status_code'] not in [STATUS_LOCKED, STATUS_DISPUTED]:
+            return {
+                "success": False,
+                "error": f"Job must be LOCKED or DISPUTED to resolve. Current: {job_details['status_name']}",
+                "job_id": job_id,
+                "current_status": job_details['status_name']
+            }
+        
+        # Get contract config for fee calculation
+        config = await self.get_contract_config()
+        
+        # Calculate payment breakdown
+        total_amount = job_details['amount_locked']
+        fee_amount = total_amount * config['fee_bps'] // 10000
+        worker_amount = total_amount - fee_amount
+        
+        # Get arbiter facade
+        facade = self._get_facade(arbiter_role)
+        
+        try:
+            tx_hash = await facade.invoke_fast(
+                self.contract.call_function("arbiter_resolve", [job_id, approve_worker])
+            )
+            
+            if approve_worker:
+                return {
+                    "success": True,
+                    "tx_hash": str(tx_hash),
+                    "job_id": job_id,
+                    "resolution": "APPROVED",
+                    "worker": job_details['worker_address'],
+                    "worker_paid_gas": worker_amount / 100_000_000,
+                    "fee_collected_gas": fee_amount / 100_000_000,
+                    "treasury": config['treasury'],
+                    "note": "Arbiter approved work. Funds released to worker.",
+                    "job_details": job_details
+                }
+            else:
+                return {
+                    "success": True,
+                    "tx_hash": str(tx_hash),
+                    "job_id": job_id,
+                    "resolution": "REFUNDED",
+                    "client": job_details['client_address'],
+                    "refunded_amount_gas": total_amount / 100_000_000,
+                    "note": "Arbiter refunded client. Full refund (no fee).",
+                    "job_details": job_details
+                }
+        
+        except TransactionFailedException:
+            raise
+        except Exception as e:
+            raise TransactionFailedException(f"Failed to resolve dispute: {str(e)}")

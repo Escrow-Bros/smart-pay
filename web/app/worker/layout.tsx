@@ -72,7 +72,12 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
                         <Gem className="w-6 h-6 text-green-400" />
                         GigSmartPay
                     </Link>
-                    <p className="text-sm text-slate-500 mt-1">Worker Mode</p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <p className="text-sm text-slate-500">Worker Mode</p>
+                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs font-semibold rounded">
+                            DEMO
+                        </span>
+                    </div>
                 </div>
 
                 <div className="flex-1 p-4 overflow-y-auto">

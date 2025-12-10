@@ -69,6 +69,29 @@ class Database:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON jobs(status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_client ON jobs(client_address)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_worker ON jobs(worker_address)")
+            
+            # Create disputes table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS disputes (
+                    dispute_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL,
+                    raised_by TEXT NOT NULL,
+                    raised_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reason TEXT NOT NULL,
+                    ai_verdict TEXT,
+                    evidence_photos TEXT,
+                    status TEXT DEFAULT 'PENDING',
+                    resolved_by TEXT,
+                    resolved_at TIMESTAMP,
+                    resolution TEXT,
+                    resolution_notes TEXT,
+                    FOREIGN KEY (job_id) REFERENCES jobs(job_id)
+                )
+            """)
+            
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_dispute_status ON disputes(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_dispute_job ON disputes(job_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_dispute_raised_by ON disputes(raised_by)")
     
     # ==================== CREATE ====================
     
@@ -226,6 +249,169 @@ class Database:
             """, (json.dumps({"disputed": True, "reason": reason}), job_id))
         
         return self.get_job(job_id)
+    
+    # ==================== DISPUTES ====================
+    
+    def create_dispute(
+        self,
+        job_id: int,
+        raised_by: str,
+        reason: str,
+        ai_verdict: Optional[Dict] = None,
+        evidence_photos: Optional[List[str]] = None
+    ) -> Dict:
+        """Create a new dispute record"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO disputes (
+                    job_id, raised_by, reason, 
+                    ai_verdict, evidence_photos, status
+                ) VALUES (?, ?, ?, ?, ?, 'PENDING')
+            """, (
+                job_id,
+                raised_by,
+                reason,
+                json.dumps(ai_verdict) if ai_verdict else None,
+                json.dumps(evidence_photos) if evidence_photos else None
+            ))
+            
+            dispute_id = cursor.lastrowid
+            
+            # Also update job status to DISPUTED if not already
+            conn.execute("""
+                UPDATE jobs 
+                SET status = 'DISPUTED',
+                    verification_result = ?
+                WHERE job_id = ? AND status != 'DISPUTED'
+            """, (json.dumps({"disputed": True, "reason": reason}), job_id))
+            
+            return self.get_dispute(dispute_id)
+    
+    def get_dispute(self, dispute_id: int) -> Optional[Dict]:
+        """Get dispute by ID with job details"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT d.*, 
+                       j.description, j.client_address, j.worker_address,
+                       j.reference_photos, j.proof_photos, j.amount, j.location,
+                       j.status as job_status, j.verification_result
+                FROM disputes d
+                JOIN jobs j ON d.job_id = j.job_id
+                WHERE d.dispute_id = ?
+            """, (dispute_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                dispute = dict(row)
+                # Parse JSON fields
+                if dispute.get('ai_verdict'):
+                    dispute['ai_verdict'] = json.loads(dispute['ai_verdict'])
+                if dispute.get('evidence_photos'):
+                    dispute['evidence_photos'] = json.loads(dispute['evidence_photos'])
+                if dispute.get('reference_photos'):
+                    dispute['reference_photos'] = json.loads(dispute['reference_photos'])
+                if dispute.get('proof_photos'):
+                    dispute['proof_photos'] = json.loads(dispute['proof_photos'])
+                if dispute.get('verification_result'):
+                    dispute['verification_result'] = json.loads(dispute['verification_result'])
+                return dispute
+            return None
+    
+    def get_dispute_by_job(self, job_id: int) -> Optional[Dict]:
+        """Get most recent dispute for a job"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT d.*, 
+                       j.description, j.client_address, j.worker_address,
+                       j.reference_photos, j.proof_photos, j.amount, j.location,
+                       j.status as job_status, j.verification_result
+                FROM disputes d
+                JOIN jobs j ON d.job_id = j.job_id
+                WHERE d.job_id = ?
+                ORDER BY d.raised_at DESC
+                LIMIT 1
+            """, (job_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                dispute = dict(row)
+                # Parse JSON fields
+                if dispute.get('ai_verdict'):
+                    dispute['ai_verdict'] = json.loads(dispute['ai_verdict'])
+                if dispute.get('evidence_photos'):
+                    dispute['evidence_photos'] = json.loads(dispute['evidence_photos'])
+                if dispute.get('reference_photos'):
+                    dispute['reference_photos'] = json.loads(dispute['reference_photos'])
+                if dispute.get('proof_photos'):
+                    dispute['proof_photos'] = json.loads(dispute['proof_photos'])
+                if dispute.get('verification_result'):
+                    dispute['verification_result'] = json.loads(dispute['verification_result'])
+                return dispute
+            return None
+    
+    def get_all_disputes(self, status: Optional[str] = None) -> List[Dict]:
+        """Get all disputes, optionally filtered by status"""
+        with self.get_connection() as conn:
+            if status:
+                cursor = conn.execute("""
+                    SELECT d.dispute_id, d.job_id, d.raised_by, d.raised_at, 
+                           d.reason, d.status, d.resolution,
+                           j.description, j.client_address, j.worker_address,
+                           j.amount, j.location, j.status as job_status
+                    FROM disputes d
+                    JOIN jobs j ON d.job_id = j.job_id
+                    WHERE d.status = ?
+                    ORDER BY d.raised_at DESC
+                """, (status,))
+            else:
+                cursor = conn.execute("""
+                    SELECT d.dispute_id, d.job_id, d.raised_by, d.raised_at, 
+                           d.reason, d.status, d.resolution,
+                           j.description, j.client_address, j.worker_address,
+                           j.amount, j.location, j.status as job_status
+                    FROM disputes d
+                    JOIN jobs j ON d.job_id = j.job_id
+                    ORDER BY d.raised_at DESC
+                """)
+            
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def resolve_dispute(
+        self,
+        dispute_id: int,
+        resolution: str,
+        resolved_by: str,
+        resolution_notes: str = ""
+    ) -> Dict:
+        """Mark dispute as resolved"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE disputes
+                SET status = 'RESOLVED',
+                    resolution = ?,
+                    resolved_by = ?,
+                    resolved_at = CURRENT_TIMESTAMP,
+                    resolution_notes = ?
+                WHERE dispute_id = ?
+            """, (resolution, resolved_by, resolution_notes, dispute_id))
+            
+            # Update job status based on resolution
+            dispute = self.get_dispute(dispute_id)
+            if dispute:
+                if resolution == 'APPROVED':
+                    conn.execute("""
+                        UPDATE jobs 
+                        SET status = 'COMPLETED'
+                        WHERE job_id = ?
+                    """, (dispute['job_id'],))
+                elif resolution == 'REFUNDED':
+                    conn.execute("""
+                        UPDATE jobs 
+                        SET status = 'REFUNDED'
+                        WHERE job_id = ?
+                    """, (dispute['job_id'],))
+            
+            return self.get_dispute(dispute_id)
     
     # ==================== STATS ====================
     

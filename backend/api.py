@@ -309,42 +309,54 @@ async def get_client_jobs(address: str = Depends(get_validated_address)):
 
 
 @app.get("/api/jobs/worker/{worker_address}/current")
-async def get_worker_active_jobs(worker_address: str = Depends(get_validated_address)):
+async def get_worker_active_jobs(worker_address: str):
     """Get all active jobs for a worker (LOCKED + DISPUTED)"""
     try:
+        # Validate address
+        if not worker_address or not worker_address.startswith('N') or len(worker_address) != 34:
+            return {"jobs": []}  # Return empty instead of error
+        
         jobs = db.get_worker_active_jobs(worker_address)
         return {"jobs": jobs}
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error getting worker active jobs: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve worker jobs")
+        return {"jobs": []}  # Return empty on error
 
 
 @app.get("/api/jobs/worker/{worker_address}/history")
-async def get_worker_history(worker_address: str = Depends(get_validated_address)):
+async def get_worker_history(worker_address: str):
     """Get all completed jobs for a worker"""
     try:
+        # Validate address
+        if not worker_address or not worker_address.startswith('N') or len(worker_address) != 34:
+            return {"jobs": []}  # Return empty instead of error
+        
         jobs = db.get_worker_completed_jobs(worker_address)
         return {"jobs": jobs}
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error getting worker history: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve worker history")
+        return {"jobs": []}  # Return empty on error
 
 
 @app.get("/api/jobs/worker/{worker_address}/stats")
-async def get_worker_stats(worker_address: str = Depends(get_validated_address)):
+async def get_worker_stats(worker_address: str):
     """Get worker statistics"""
     try:
+        # Validate address
+        if not worker_address or not worker_address.startswith('N') or len(worker_address) != 34:
+            return {"total_jobs": 0, "completed": 0, "active": 0, "total_earned": 0}  # Return defaults
+        
         stats = db.get_worker_stats(worker_address)
         return stats
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error getting worker stats: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve worker statistics")
+        return {"total_jobs": 0, "completed": 0, "active": 0, "total_earned": 0}  # Return defaults on error
 
 
 @app.get("/api/jobs/{job_id}")
@@ -872,6 +884,208 @@ async def clear_chat_session(session_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear session: {str(e)}")
+
+
+# ==================== TRIBUNAL / DISPUTE RESOLUTION ====================
+
+class DisputeCreate(BaseModel):
+    job_id: int = Field(..., gt=0)
+    raised_by: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=10)
+
+class DisputeResolve(BaseModel):
+    dispute_id: int = Field(..., gt=0)
+    resolution: str = Field(..., pattern="^(APPROVED|REFUNDED)$")
+    arbiter_address: str = Field(..., min_length=1)
+    resolution_notes: str = ""
+
+@app.get("/api/disputes")
+async def get_disputes(status: Optional[str] = None):
+    """
+    Get all disputes, optionally filtered by status.
+    
+    Query params:
+        status: PENDING | UNDER_REVIEW | RESOLVED (optional)
+    
+    Returns:
+        List of disputes with job details
+    """
+    try:
+        db = get_db()
+        
+        # Validate status if provided
+        if status and status not in ['PENDING', 'UNDER_REVIEW', 'RESOLVED']:
+            raise HTTPException(status_code=400, detail="Invalid status. Must be PENDING, UNDER_REVIEW, or RESOLVED")
+        
+        disputes = db.get_all_disputes(status)
+        
+        return {
+            "success": True,
+            "disputes": disputes,
+            "count": len(disputes)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching disputes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch disputes: {str(e)}")
+
+@app.get("/api/disputes/{dispute_id}")
+async def get_dispute_details(dispute_id: int):
+    """
+    Get detailed information about a specific dispute.
+    Includes full job details, AI verdict, and evidence photos.
+    """
+    try:
+        db = get_db()
+        dispute = db.get_dispute(dispute_id)
+        
+        if not dispute:
+            raise HTTPException(status_code=404, detail="Dispute not found")
+        
+        return {
+            "success": True,
+            "dispute": dispute
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching dispute: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch dispute: {str(e)}")
+
+@app.get("/api/jobs/{job_id}/dispute")
+async def get_job_dispute(job_id: int):
+    """Get the most recent dispute for a specific job"""
+    try:
+        db = get_db()
+        dispute = db.get_dispute_by_job(job_id)
+        
+        if not dispute:
+            raise HTTPException(status_code=404, detail="No dispute found for this job")
+        
+        return {
+            "success": True,
+            "dispute": dispute
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching job dispute: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch job dispute: {str(e)}")
+
+@app.post("/api/disputes/create")
+async def create_dispute(request: DisputeCreate):
+    """
+    Manually create a dispute.
+    Used for:
+    - Worker appeals after AI rejection
+    - Client complaints about completed work
+    - Manual escalation by either party
+    """
+    try:
+        db = get_db()
+        
+        # Validate job exists
+        job = db.get_job(request.job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Validate raised_by is either client or worker
+        if request.raised_by not in [job['client_address'], job.get('worker_address')]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only the client or assigned worker can create a dispute"
+            )
+        
+        # Get AI verdict and evidence from job
+        ai_verdict = job.get('verification_result')
+        evidence_photos = job.get('proof_photos', [])
+        
+        dispute = db.create_dispute(
+            job_id=request.job_id,
+            raised_by=request.raised_by,
+            reason=request.reason,
+            ai_verdict=ai_verdict,
+            evidence_photos=evidence_photos
+        )
+        
+        return {
+            "success": True,
+            "dispute": dispute,
+            "message": "Dispute created successfully. An arbiter will review your case."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating dispute: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create dispute: {str(e)}")
+
+@app.post("/api/disputes/resolve")
+async def resolve_dispute(request: DisputeResolve):
+    """
+    Resolve a dispute by approving payment to worker or refunding client.
+    
+    Security: In production, this should require:
+    - Arbiter role verification (JWT, OAuth, or Neo signature)
+    - Multi-signature for high-value disputes
+    - Rate limiting and audit logging
+    
+    Process:
+    1. Validate dispute exists and is unresolved
+    2. Call blockchain arbiter_resolve function
+    3. Update database with resolution
+    4. Emit notifications (future enhancement)
+    """
+    try:
+        db = get_db()
+        
+        # Get dispute details
+        dispute = db.get_dispute(request.dispute_id)
+        if not dispute:
+            raise HTTPException(status_code=404, detail="Dispute not found")
+        
+        if dispute['status'] == 'RESOLVED':
+            raise HTTPException(status_code=400, detail="Dispute already resolved")
+        
+        # TODO: Add arbiter authentication/authorization here
+        # For MVP: Allow any address (should check against whitelist or role system)
+        
+        # Execute blockchain resolution
+        neo = NeoMCP()
+        approve_worker = (request.resolution == 'APPROVED')
+        
+        blockchain_result = await neo.arbiter_resolve_on_chain(
+            job_id=dispute['job_id'],
+            approve_worker=approve_worker,
+            arbiter_role='agent'  # Using agent role as arbiter for MVP
+        )
+        
+        if not blockchain_result['success']:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Blockchain resolution failed: {blockchain_result.get('error', 'Unknown error')}"
+            )
+        
+        # Update database
+        resolved_dispute = db.resolve_dispute(
+            dispute_id=request.dispute_id,
+            resolution=request.resolution,
+            resolved_by=request.arbiter_address,
+            resolution_notes=request.resolution_notes
+        )
+        
+        return {
+            "success": True,
+            "message": f"Dispute resolved - {request.resolution}",
+            "dispute": resolved_dispute,
+            "blockchain": blockchain_result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Dispute resolution error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to resolve dispute: {str(e)}")
 
 
 if __name__ == "__main__":

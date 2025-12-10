@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import ssl
 from pathlib import Path
 from neo3.wallet.account import Account
 from neo3.api.wrappers import ChainFacade, GenericContract
@@ -7,6 +8,9 @@ from neo3.api.helpers.signing import sign_with_account
 from neo3.network.payloads.verification import Signer
 from neo3.core import types
 from neo3.wallet import utils as wallet_utils
+
+# Disable SSL verification for testnet (avoid certificate issues)
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 async def main():
@@ -53,7 +57,8 @@ async def main():
     print(f"   1. set_owner({deployer_addr})")
     print(f"   2. set_agent({agent_addr})")
     print(f"   3. set_treasury({treasury_addr})")
-    print(f"   4. set_fee_bps(500)  # 5% fee")
+    print(f"   4. set_arbiter({agent_addr})  # Use agent as arbiter")
+    print(f"   5. set_fee_bps(500)  # 5% fee")
     print()
     
     # Setup ChainFacade
@@ -91,12 +96,21 @@ async def main():
         print(f"   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
-        # Step 4: Set Fee (500 basis points = 5%)
-        print("\n4️⃣  Setting fee to 5%...")
+        # Step 4: Set Arbiter (use same agent address for MVP)
+        print("\n4️⃣  Setting arbiter...")
         tx4 = await facade.invoke_fast(
-            vault.call_function("set_fee_bps", [500])
+            vault.call_function("set_arbiter", [agent_script_hash])
         )
         print(f"   ✅ Transaction sent: {tx4}")
+        print(f"   ⏳ Waiting for confirmation...")
+        await asyncio.sleep(20)
+        
+        # Step 5: Set Fee (500 basis points = 5%)
+        print("\n5️⃣  Setting fee to 5%...")
+        tx5 = await facade.invoke_fast(
+            vault.call_function("set_fee_bps", [500])
+        )
+        print(f"   ✅ Transaction sent: {tx5}")
         print(f"   ⏳ Waiting for confirmation...")
         await asyncio.sleep(20)
         
@@ -105,8 +119,9 @@ async def main():
         print(f"   Owner: {deployer_addr}")
         print(f"   Agent: {agent_addr}")
         print(f"   Treasury: {treasury_addr}")
+        print(f"   Arbiter: {agent_addr}  (same as agent)")
         print(f"   Fee: 5% (500 bps)")
-        print(f"\n✅ Ready to create jobs!")
+        print(f"\n✅ Ready to create jobs and resolve disputes!")
         print(f"🔍 View on Dora: https://testnet.neotube.io/contract/{contract_hash}")
         
     except Exception as e:

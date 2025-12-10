@@ -1,6 +1,8 @@
 import asyncio
 import json
 import sys
+import ssl
+import os
 from pathlib import Path
 from neo3.wallet.account import Account
 from neo3.api.wrappers import ChainFacade, GenericContract
@@ -8,6 +10,11 @@ from neo3.api.helpers.signing import sign_with_account
 from neo3.network.payloads.verification import Signer
 from neo3.core import types
 from neo3.api import noderpc
+
+# Disable SSL verification for testnet (avoid certificate issues)
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 async def main():
