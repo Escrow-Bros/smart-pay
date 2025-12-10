@@ -11,10 +11,28 @@ from neo3.network.payloads.verification import Signer
 from neo3.core import types
 from neo3.api import noderpc
 
-# Disable SSL verification for testnet (avoid certificate issues)
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-os.environ['CURL_CA_BUNDLE'] = ''
-ssl._create_default_https_context = ssl._create_unverified_context
+def create_testnet_ssl_context():
+    """Create SSL context for testnet with optional verification bypass"""
+    # Check if we're explicitly in testnet environment
+    env_mode = os.getenv('NETWORK_MODE', 'testnet').lower()
+    allow_insecure = os.getenv('TESTNET_ALLOW_INSECURE', 'false').lower() == 'true'
+    
+    # Fail-safe: refuse to disable SSL in production
+    if env_mode == 'production':
+        print("ERROR: Cannot disable SSL verification in production mode")
+        print("   Set NETWORK_MODE=testnet if you need insecure SSL for testing")
+        sys.exit(1)
+    
+    if allow_insecure and env_mode == 'testnet':
+        print("WARNING: SSL verification disabled for testnet (TESTNET_ALLOW_INSECURE=true)")
+        print("   This should NEVER be used in production environments")
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
+    else:
+        # Use default SSL verification
+        return ssl.create_default_context()
 
 
 async def main():
@@ -36,6 +54,10 @@ async def main():
     if not rpc or not deployer_wif:
         print("❌ Missing NEO_TESTNET_RPC or DEPLOYER_WIF in .env")
         sys.exit(1)
+    
+    # Create SSL context for testnet (scoped, not global)
+    ssl_context = create_testnet_ssl_context()
+    print(f"🔒 SSL Context: {ssl_context.check_hostname=}, {ssl_context.verify_mode=}")
     
     # Load deployer account
     deployer = Account.from_wif(deployer_wif)

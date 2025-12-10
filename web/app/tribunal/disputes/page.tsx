@@ -12,6 +12,7 @@ export default function AllDisputesPage() {
     const [disputes, setDisputes] = useState<DisputeDict[]>([]);
     const [filteredDisputes, setFilteredDisputes] = useState<DisputeDict[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<string>(statusFilter);
 
@@ -24,15 +25,28 @@ export default function AllDisputesPage() {
     }, [disputes, activeFilter, searchQuery]);
 
     const fetchDisputes = async () => {
+        setIsLoading(true);
+        setError(null);
+        
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/disputes`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
 
             if (data.success) {
                 setDisputes(data.disputes);
+                setError(null);
+            } else {
+                setError(data.error || 'Failed to load disputes');
             }
-        } catch (error) {
-            console.error('Failed to fetch disputes:', error);
+        } catch (err) {
+            console.error('Failed to fetch disputes:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Network error. Please check your connection.';
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -73,8 +87,29 @@ export default function AllDisputesPage() {
 
     return (
         <div className="space-y-6">
+            {/* Error Banner */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                            <span className="text-red-600 text-xl">⚠️</span>
+                            <div>
+                                <h3 className="text-sm font-semibold text-red-800 mb-1">Failed to Load Disputes</h3>
+                                <p className="text-sm text-red-700">{error}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={fetchDisputes}
+                            className="ml-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 text-sm font-medium rounded-lg transition-colors"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Filters and Search */}
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-white rounded-lg shadow p-4">,
                 <div className="flex flex-col md:flex-row gap-4">
                     {/* Search */}
                     <div className="flex-1">

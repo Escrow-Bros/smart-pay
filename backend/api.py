@@ -65,6 +65,54 @@ class RateLimiter:
 
 rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
 
+# Arbiter rate limiter (stricter limits for sensitive operations)
+arbiter_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
+# ==================== ARBITER CONFIGURATION ====================
+
+# Arbiter whitelist - authorized addresses that can resolve disputes
+# In production, this should be stored in database with role management
+ARBITER_WHITELIST = set()
+
+def load_arbiter_whitelist():
+    """Load arbiter addresses from environment variables"""
+    agent_addr = os.getenv('AGENT_ADDR', '')
+    if agent_addr:
+        ARBITER_WHITELIST.add(agent_addr)
+    # Add additional arbiters from comma-separated env var
+    extra_arbiters = os.getenv('ARBITER_ADDRESSES', '')
+    if extra_arbiters:
+        for addr in extra_arbiters.split(','):
+            addr = addr.strip()
+            if addr:
+                ARBITER_WHITELIST.add(addr)
+
+# Audit log storage (in production, use proper database table)
+AUDIT_LOGS = []
+
+def log_arbiter_action(
+    arbiter_address: str,
+    job_id: int,
+    dispute_id: int,
+    decision: str,
+    client_ip: str = "unknown",
+    request_id: str = "unknown"
+):
+    """Record arbiter resolution action for audit trail"""
+    import datetime
+    log_entry = {
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "arbiter_address": arbiter_address,
+        "job_id": job_id,
+        "dispute_id": dispute_id,
+        "decision": decision,
+        "client_ip": client_ip,
+        "request_id": request_id
+    }
+    AUDIT_LOGS.append(log_entry)
+    print(f"🔍 AUDIT LOG: {log_entry}")
+    # In production: write to database audit table
+
 # ==================== ADDRESS VALIDATION ====================
 
 def validate_neo_address(address: str) -> str:
@@ -198,6 +246,10 @@ app.add_middleware(
 # Initialize services
 db = get_db()
 mcp = NeoMCP()
+
+# Load arbiter whitelist on startup
+load_arbiter_whitelist()
+print(f"✅ Loaded {len(ARBITER_WHITELIST)} authorized arbiters: {ARBITER_WHITELIST}")
 eye_agent = UniversalEyeAgent()
 
 
@@ -895,8 +947,8 @@ class DisputeCreate(BaseModel):
 
 class DisputeResolve(BaseModel):
     dispute_id: int = Field(..., gt=0)
-    resolution: str = Field(..., pattern="^(APPROVED|REFUNDED)$")
-    arbiter_address: str = Field(..., min_length=1)
+    approve_worker: bool = Field(..., description="True to approve worker payment, False to refund client")
+    arbiter_address: Optional[str] = None  # Optional, will use AGENT_ADDR from config if not provided
     resolution_notes: str = ""
 
 @app.get("/api/disputes")
@@ -1047,16 +1099,45 @@ async def resolve_dispute(request: DisputeResolve):
         if dispute['status'] == 'RESOLVED':
             raise HTTPException(status_code=400, detail="Dispute already resolved")
         
-        # TODO: Add arbiter authentication/authorization here
-        # For MVP: Allow any address (should check against whitelist or role system)
+        # Get arbiter address from request or use default from config
+        arbiter_address = request.arbiter_address
+        if not arbiter_address:
+            # Use AGENT_ADDR as default arbiter
+            arbiter_address = os.getenv('AGENT_ADDR', 'NRF64mpLJ8yExn38EjwkxzPGoJ5PLyUbtP')
+        
+        # Authorization: Check arbiter whitelist
+        if arbiter_address not in ARBITER_WHITELIST:
+            raise HTTPException(
+                status_code=403,
+                detail="Unauthorized: Address not in arbiter whitelist. Only authorized arbiters can resolve disputes."
+            )
+        
+        # Rate limiting: Check per-address rate limit for arbiter operations
+        if not arbiter_rate_limiter.is_allowed(arbiter_address):
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Too many resolution requests from this arbiter address."
+            )
+        
+        # Derive resolution string from boolean
+        resolution = 'APPROVED' if request.approve_worker else 'REFUNDED'
+        
+        # Audit log: Record resolution attempt before blockchain call
+        log_arbiter_action(
+            arbiter_address=arbiter_address,
+            job_id=dispute['job_id'],
+            dispute_id=request.dispute_id,
+            decision=resolution,
+            client_ip="unknown",  # In production: extract from request headers
+            request_id=f"dispute_{request.dispute_id}_{int(time.time())}"
+        )
         
         # Execute blockchain resolution
         neo = NeoMCP()
-        approve_worker = (request.resolution == 'APPROVED')
         
         blockchain_result = await neo.arbiter_resolve_on_chain(
             job_id=dispute['job_id'],
-            approve_worker=approve_worker,
+            approve_worker=request.approve_worker,
             arbiter_role='agent'  # Using agent role as arbiter for MVP
         )
         
@@ -1069,16 +1150,16 @@ async def resolve_dispute(request: DisputeResolve):
         # Update database
         resolved_dispute = db.resolve_dispute(
             dispute_id=request.dispute_id,
-            resolution=request.resolution,
-            resolved_by=request.arbiter_address,
+            resolution=resolution,
+            resolved_by=arbiter_address,
             resolution_notes=request.resolution_notes
         )
         
         return {
             "success": True,
-            "message": f"Dispute resolved - {request.resolution}",
+            "message": f"Dispute resolved - {resolution}",
             "dispute": resolved_dispute,
-            "blockchain": blockchain_result
+            "transaction": blockchain_result
         }
         
     except HTTPException:

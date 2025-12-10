@@ -385,6 +385,17 @@ class Database:
     ) -> Dict:
         """Mark dispute as resolved"""
         with self.get_connection() as conn:
+            # First, fetch the job_id from the current connection before UPDATE
+            cursor = conn.execute("""
+                SELECT job_id FROM disputes WHERE dispute_id = ?
+            """, (dispute_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Dispute {dispute_id} not found")
+            
+            job_id = row['job_id']
+            
+            # Now perform the UPDATE on disputes table
             conn.execute("""
                 UPDATE disputes
                 SET status = 'RESOLVED',
@@ -395,23 +406,40 @@ class Database:
                 WHERE dispute_id = ?
             """, (resolution, resolved_by, resolution_notes, dispute_id))
             
-            # Update job status based on resolution
-            dispute = self.get_dispute(dispute_id)
-            if dispute:
-                if resolution == 'APPROVED':
-                    conn.execute("""
-                        UPDATE jobs 
-                        SET status = 'COMPLETED'
-                        WHERE job_id = ?
-                    """, (dispute['job_id'],))
-                elif resolution == 'REFUNDED':
-                    conn.execute("""
-                        UPDATE jobs 
-                        SET status = 'REFUNDED'
-                        WHERE job_id = ?
-                    """, (dispute['job_id'],))
+            # Update job status based on resolution using the fetched job_id
+            if resolution == 'APPROVED':
+                conn.execute("""
+                    UPDATE jobs 
+                    SET status = 'COMPLETED'
+                    WHERE job_id = ?
+                """, (job_id,))
+            elif resolution == 'REFUNDED':
+                conn.execute("""
+                    UPDATE jobs 
+                    SET status = 'REFUNDED'
+                    WHERE job_id = ?
+                """, (job_id,))
             
-            return self.get_dispute(dispute_id)
+            # Commit changes before querying the updated dispute
+            conn.commit()
+            
+            # Now fetch the updated dispute from the same connection
+            cursor = conn.execute("""
+                SELECT 
+                    d.*,
+                    j.description, j.client_address, j.worker_address,
+                    j.amount, j.location, j.status as job_status,
+                    j.reference_photos, j.proof_photos, j.verification_result
+                FROM disputes d
+                JOIN jobs j ON d.job_id = j.job_id
+                WHERE d.dispute_id = ?
+            """, (dispute_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            else:
+                raise ValueError(f"Could not fetch updated dispute {dispute_id}")
     
     # ==================== STATS ====================
     

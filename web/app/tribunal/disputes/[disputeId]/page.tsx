@@ -136,8 +136,8 @@ export default function DisputeDetailPage() {
                     <InfoField label="Job ID" value={`#${dispute.job_id}`} />
                     <InfoField label="Amount" value={`${dispute.amount} GAS`} />
                     <InfoField label="Description" value={dispute.description || 'N/A'} />
-                    <InfoField label="Client" value={shortenAddress(dispute.client || '')} />
-                    <InfoField label="Worker" value={shortenAddress(dispute.worker || '')} />
+                    <InfoField label="Client" value={shortenAddress(dispute.client_address || '')} />
+                    <InfoField label="Worker" value={shortenAddress(dispute.worker_address || '')} />
                 </div>
             </div>
 
@@ -153,8 +153,12 @@ export default function DisputeDetailPage() {
                                 AI Analysis Verdict
                             </label>
                             <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                <p className="text-sm text-purple-900">{dispute.ai_verdict}</p>
-                                {dispute.confidence_score && (
+                                <p className="text-sm text-purple-900">
+                                    {typeof dispute.ai_verdict === 'string' 
+                                        ? dispute.ai_verdict 
+                                        : dispute.ai_verdict?.verdict || dispute.ai_verdict?.summary || JSON.stringify(dispute.ai_verdict, null, 2)}
+                                </p>
+                                {dispute.confidence_score != null && (
                                     <div className="mt-2">
                                         <span className="text-xs text-purple-700">
                                             Confidence: {(dispute.confidence_score * 100).toFixed(1)}%
@@ -168,26 +172,31 @@ export default function DisputeDetailPage() {
             </div>
 
             {/* Photo Comparison */}
-            {dispute.before_image_url && dispute.after_image_url && (
+            {((dispute.reference_photos && dispute.reference_photos.length > 0) || 
+              (dispute.proof_photos && dispute.proof_photos.length > 0)) && (
                 <div className="bg-white rounded-lg shadow p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Photo Comparison</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 className="text-sm font-medium text-gray-700 mb-2">Before</h3>
-                            <img
-                                src={dispute.before_image_url}
-                                alt="Before"
-                                className="w-full h-64 object-cover rounded-lg border border-gray-300"
-                            />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-medium text-gray-700 mb-2">After (Submitted)</h3>
-                            <img
-                                src={dispute.after_image_url}
-                                alt="After"
-                                className="w-full h-64 object-cover rounded-lg border border-gray-300"
-                            />
-                        </div>
+                        {dispute.reference_photos && dispute.reference_photos.length > 0 && (
+                            <div>
+                                <h3 className="text-sm font-medium text-gray-700 mb-2">Reference (Client)</h3>
+                                <img
+                                    src={dispute.reference_photos[0]}
+                                    alt="Reference"
+                                    className="w-full h-64 object-cover rounded-lg border border-gray-300"
+                                />
+                            </div>
+                        )}
+                        {dispute.proof_photos && dispute.proof_photos.length > 0 && (
+                            <div>
+                                <h3 className="text-sm font-medium text-gray-700 mb-2">Proof (Worker)</h3>
+                                <img
+                                    src={dispute.proof_photos[0]}
+                                    alt="Proof"
+                                    className="w-full h-64 object-cover rounded-lg border border-gray-300"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -207,7 +216,7 @@ export default function DisputeDetailPage() {
                         />
                         <InfoField 
                             label="Outcome" 
-                            value={dispute.approve_worker ? 'Worker Approved' : 'Client Refunded'} 
+                            value={dispute.resolution === 'APPROVED' ? 'Worker Approved (95% payment)' : 'Client Refunded (100%)'} 
                         />
                         {dispute.resolution_notes && (
                             <InfoField label="Notes" value={dispute.resolution_notes} isLong />
