@@ -315,7 +315,8 @@ class ConnectionManager:
             except (WebSocketDisconnect, RuntimeError) as e:
                 print(f"⚠️  {type(e).__name__} sending to {client_id}: {e}")
                 disconnected.append(connection)
-            except Exception as e:
+            # Intentionally catch all exceptions to handle unexpected send errors gracefully
+            except Exception as e:  # noqa: BLE001
                 print(f"⚠️  Unexpected {type(e).__name__} sending to {client_id}: {e}")
                 disconnected.append(connection)
         
@@ -431,7 +432,13 @@ async def websocket_endpoint(websocket: WebSocket, client_address: str):
         while True:
             # Keep connection alive and handle incoming messages
             data = await websocket.receive_text()
-            message = json.loads(data)
+            try:
+                message = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_json(
+                    {"type": "error", "message": "Invalid JSON payload"}
+                )
+                continue
             
             # Handle ping/pong for connection health
             if message.get("type") == "ping":
@@ -540,7 +547,7 @@ class GasEstimateRequest(BaseModel):
             raise ValueError("Neo address must be a non-empty string")
         # Neo N3 addresses start with 'N' and are 34 characters long
         if not v.startswith('N') or len(v) != 34:
-            raise ValueError(f"Invalid Neo N3 address format: must start with 'N' and be 34 characters long")
+            raise ValueError("Invalid Neo N3 address format: must start with 'N' and be 34 characters long")
         return v
 
 
@@ -575,7 +582,13 @@ async def estimate_gas_cost(request: GasEstimateRequest):
             "resolve": 0.015         # ~0.015 GAS for resolution
         }
         
-        operation_cost = operation_costs.get(request.operation, 0.02)
+        # Reject unsupported operations instead of silently defaulting
+        if request.operation not in operation_costs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported operation for gas estimation: {request.operation!r}",
+            )
+        operation_cost = operation_costs[request.operation]
         
         # Total required = job amount + platform fee + transaction cost
         total_required = request.amount + platform_fee + operation_cost
@@ -599,9 +612,15 @@ async def estimate_gas_cost(request: GasEstimateRequest):
             }
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        print(f"❌ Gas estimation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to estimate gas: {str(e)}") from e
+        print(f"❌ Gas estimation error: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to estimate gas: {e!s}",
+        ) from e
 
 
 # ==================== JOB LISTING ENDPOINTS ====================

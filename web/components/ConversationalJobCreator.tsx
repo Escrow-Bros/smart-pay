@@ -252,6 +252,10 @@ export default function ConversationalJobCreator() {
       
       // Extract nested estimate object
       const estimate = response.estimate;
+      if (!estimate || typeof estimate.sufficient !== 'boolean') {
+        toast.error('Failed to verify balance. Please try again.');
+        return;
+      }
       
       if (!estimate.sufficient) {
         toast.error(
