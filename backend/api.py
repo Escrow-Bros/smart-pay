@@ -145,8 +145,8 @@ class VerificationPlan(BaseModel):
     location_required: bool = Field(default=False, description="Whether GPS verification is required")
     comparison_mode: str = Field(default="before_after", description="before_after, reference_match, or checklist")
     
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "task_category": "cleaning",
                 "success_criteria": ["Area is visibly clean", "No debris present"],
@@ -156,6 +156,7 @@ class VerificationPlan(BaseModel):
                 "comparison_mode": "before_after"
             }
         }
+    }
 
 class CreateJobRequest(BaseModel):
     client_address: str = Field(..., min_length=34, max_length=34, description="Neo N3 address (34 chars starting with N)")
@@ -290,7 +291,7 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
             # Check on-chain job status
             job_status = await mcp.get_job_status(job_id)
             
-            if job_status.get("status") == "COMPLETED":
+            if job_status.get("status_name") == "COMPLETED":
                 print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 15}s")
                 # Update database to COMPLETED
                 db.complete_job(job_id=job_id)
@@ -304,7 +305,7 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
     
     # If we get here, transaction didn't confirm in time
     print(f"⚠️  WARNING: Job #{job_id} transaction {tx_hash} not confirmed after {max_attempts * 15}s")
-    print(f"   Job remains in PAYMENT_PENDING status. Manual verification recommended.")
+    print("   Job remains in PAYMENT_PENDING status. Manual verification recommended.")
 
 
 # ==================== HEALTH CHECK ====================
@@ -508,11 +509,12 @@ async def get_job_status(job_id: int):
         if db_status == "PAYMENT_PENDING":
             try:
                 chain_status = await mcp.get_job_status(job_id)
-                response["chain_status"] = chain_status.get("status")
-                response["synced"] = chain_status.get("status") == db_status
+                chain_status_name = chain_status.get("status_name")
+                response["chain_status"] = chain_status_name
+                response["synced"] = chain_status_name == db_status
                 
                 # If blockchain shows COMPLETED but DB doesn't, update it
-                if chain_status.get("status") == "COMPLETED":
+                if chain_status_name == "COMPLETED":
                     print(f"🔄 Syncing job #{job_id}: blockchain is COMPLETED, updating DB")
                     db.complete_job(job_id=job_id)
                     response["db_status"] = "COMPLETED"
@@ -671,17 +673,20 @@ async def create_job(request: CreateJobRequest):
         
         vp = request.verification_plan
         full_details += f"VERIFICATION PLAN:\n"
-        full_details += f"Category: {vp.get('task_category', 'General')}\n"
+        full_details += f"Category: {vp.task_category}\n"
+        full_details += f"Comparison Mode: {vp.comparison_mode}\n"
         
-        if 'expected_transformation' in vp:
-            et = vp['expected_transformation']
-            full_details += f"Transformation:\n  Before: {et.get('before', 'N/A')}\n  After: {et.get('after', 'N/A')}\n"
+        if vp.success_criteria:
+            full_details += "Success Criteria:\n" + "\n".join([f"  - {item}" for item in vp.success_criteria]) + "\n"
+        
+        if vp.rejection_criteria:
+            full_details += "Rejection Criteria:\n" + "\n".join([f"  - {item}" for item in vp.rejection_criteria]) + "\n"
             
-        if 'verification_checklist' in vp:
-            full_details += "Checklist:\n" + "\n".join([f"  - {item}" for item in vp['verification_checklist']]) + "\n"
-            
-        if 'quality_indicators' in vp:
-            full_details += "Quality Indicators:\n" + "\n".join([f"  - {item}" for item in vp['quality_indicators']]) + "\n"
+        if vp.visual_checks:
+            full_details += "Visual Checks:\n" + "\n".join([f"  - {item}" for item in vp.visual_checks]) + "\n"
+        
+        if vp.location_required:
+            full_details += "GPS Verification: Required\n"
         
         # Step 1: Create on blockchain first
         result = await mcp.create_job_on_chain(
@@ -710,7 +715,7 @@ async def create_job(request: CreateJobRequest):
             location=request.location,
             latitude=request.latitude,
             longitude=request.longitude,
-            verification_plan=request.verification_plan
+            verification_plan=request.verification_plan.model_dump()
         )
         
         print("✅ Database job created successfully")
@@ -855,11 +860,16 @@ async def submit_proof(request: SubmitProofRequest):
                 )
                 
                 # Start background task to monitor confirmation
-                asyncio.create_task(
+                # Store reference to prevent silent exception loss
+                task = asyncio.create_task(
                     monitor_transaction_confirmation(
                         job_id=request.job_id,
                         tx_hash=tx_hash
                     )
+                )
+                # Log any unhandled exceptions in the background task
+                task.add_done_callback(
+                    lambda t: print(f"❌ Background task exception: {t.exception()}") if not t.cancelled() and t.exception() else None
                 )
                 
                 return {

@@ -240,8 +240,8 @@ class Database:
     def complete_job(
         self,
         job_id: int,
-        verification_result: Dict = None,
-        tx_hash: str = None
+        verification_result: Dict | None = None,
+        tx_hash: str | None = None
     ) -> Dict:
         """Mark job as completed after payment confirmation on blockchain"""
         with self.get_connection() as conn:
