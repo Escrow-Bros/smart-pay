@@ -182,6 +182,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Keep fetchData ref up-to-date to prevent stale closures in WebSocket handler
+    const fetchDataRef = useRef(fetchData);
+    useEffect(() => {
+        fetchDataRef.current = fetchData;
+    });
+
     // Auto-fetch data when wallet changes or after restoration
     useEffect(() => {
         if (state.walletAddress && state.userMode && isInitialized) {
@@ -200,7 +206,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!state.walletAddress) return;
 
         const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        let apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        // Ensure apiUrl has a protocol before replacing
+        if (!apiUrl.match(/^https?:\/\//)) {
+            const defaultProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https://' : 'http://';
+            apiUrl = defaultProtocol + apiUrl;
+        }
+        
         const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
 
         const connectWebSocket = () => {
@@ -243,12 +256,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             duration: 5000,
                             position: 'top-right',
                         });
-                        // Auto-refresh data to update UI
-                        fetchData();
+                        // Auto-refresh data to update UI (use ref to avoid stale closure)
+                        fetchDataRef.current();
                     } else if (data.type === 'PAYMENT_PENDING') {
                         toast.loading(`⏳ Job #${data.job_id} payment pending confirmation...`, {
                             id: `job-${data.job_id}`,
-                            duration: 15000,
+                            duration: Infinity,  // Dismissed explicitly by JOB_COMPLETED/PAYMENT_TIMEOUT
                         });
                     } else if (data.type === 'PAYMENT_TIMEOUT') {
                         toast.dismiss(`job-${data.job_id}`);
@@ -262,19 +275,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             duration: 4000,
                             icon: 'ℹ️',
                         });
-                        // Auto-refresh data to update UI
-                        fetchData();
+                        // Auto-refresh data to update UI (use ref to avoid stale closure)
+                        fetchDataRef.current();
                     } else if (data.type === 'DISPUTE_RAISED') {
                         toast(`⚖️ Dispute raised on Job #${data.job_id}`, {
                             duration: 6000,
                             icon: '⚠️',
                         });
-                        fetchData();
+                        fetchDataRef.current();
                     } else if (data.type === 'DISPUTE_RESOLVED') {
                         toast.success(`✅ Dispute resolved for Job #${data.job_id}`, {
                             duration: 5000,
                         });
-                        fetchData();
+                        fetchDataRef.current();
                     }
                 };
                 
@@ -330,6 +343,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // Initial connection
         isIntentionalClose.current = false;
+        reconnectAttemptsRef.current = 0;  // Reset failure count for new wallet
         connectWebSocket();
         
         // Cleanup on unmount or wallet change

@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 import time
+import logging
 from collections import defaultdict
 from threading import Lock
 
@@ -68,6 +69,9 @@ arbiter_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 # Arbiter whitelist - authorized addresses that can resolve disputes
 # In production, this should be stored in database with role management
 ARBITER_WHITELIST = set()
+
+# Task tracking for recovery and background jobs
+recovery_tasks: set = set()
 
 def load_arbiter_whitelist():
     """Load arbiter addresses from environment variables"""
@@ -358,9 +362,12 @@ async def startup_recovery():
                 task = asyncio.create_task(
                     monitor_transaction_confirmation(job_id, tx_hash)
                 )
-                # Add exception handler
+                # Track task for lifecycle management
+                recovery_tasks.add(task)
+                task.add_done_callback(recovery_tasks.discard)
+                # Add exception handler (capture job_id by value to avoid closure issue)
                 task.add_done_callback(
-                    lambda t: print(f"❌ Recovery task exception: {t.exception()}") if t.exception() else None
+                    lambda t, jid=job_id: logging.error(f"Recovery task exception for job {jid}", exc_info=t.exception()) if t.exception() else None
                 )
                 recovered += 1
             else:
@@ -371,8 +378,9 @@ async def startup_recovery():
         else:
             print("✅ Recovery complete: No jobs needed recovery")
             
-    except Exception as e:
-        print(f"❌ Recovery failed: {e}")
+    except Exception:
+        # Use logging.exception for better stack trace visibility
+        logging.exception("Recovery failed")
         # Don't crash the server on recovery failure
 
 # ==================== BACKGROUND TASK: TX MONITORING ====================
