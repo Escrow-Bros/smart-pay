@@ -1368,9 +1368,19 @@ async def submit_proof(request: SubmitProofRequest):
             
             # Extract AI-generated rejection reason
             ai_reason = verification.get("reason", "Work did not meet requirements")
+            category = verification.get("category", "")
+            
+            # Check if this is a GPS failure (not worker's fault)
+            is_gps_failure = category == "GPS_LOCATION_FAILED" and verification.get("gps_data", {}).get("distance_meters", 0) > 5000
             
             # Build detailed dispute reason from verification breakdown
             dispute_reason_parts = [ai_reason]
+            
+            # Add note if GPS failure detected
+            if is_gps_failure:
+                dispute_reason_parts.append("
+
+⚠️ NOTE: This may be a GPS/location service failure, not worker fraud. Review carefully.")
             
             # Add specific issues if available
             if verification.get("issues"):
@@ -1637,6 +1647,11 @@ class DisputeResolve(BaseModel):
     arbiter_address: Optional[str] = None  # Optional, will use AGENT_ADDR from config if not provided
     resolution_notes: str = ""
 
+class DisputeDismiss(BaseModel):
+    dispute_id: int = Field(..., gt=0)
+    reason: str = Field(default="Technical issue - not worker's fault", description="Reason for dismissal")
+    arbiter_address: Optional[str] = None
+
 @app.get("/api/disputes")
 async def get_disputes(status: Optional[str] = None):
     """
@@ -1853,6 +1868,64 @@ async def resolve_dispute(request: DisputeResolve):
     except Exception as e:
         print(f"❌ Dispute resolution error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to resolve dispute: {str(e)}")
+
+@app.post("/api/disputes/dismiss")
+async def dismiss_dispute(request: DisputeDismiss):
+    """
+    Dismiss a dispute due to technical issues (GPS failure, system error, etc.)
+    Resets the job back to IN_PROGRESS so worker can retry without penalty.
+    
+    Use this when:
+    - GPS/location services failed (not worker's fault)
+    - System error caused false rejection
+    - Network issues during submission
+    """
+    try:
+        db = get_db()
+        
+        # Get dispute details
+        dispute = db.get_dispute(request.dispute_id)
+        if not dispute:
+            raise HTTPException(status_code=404, detail="Dispute not found")
+        
+        if dispute['status'] == 'RESOLVED':
+            raise HTTPException(status_code=400, detail="Dispute already resolved")
+        
+        # Get arbiter address
+        arbiter_address = request.arbiter_address or os.getenv('AGENT_ADDR', 'NRF64mpLJ8yExn38EjwkxzPGoJ5PLyUbtP')
+        
+        # Authorization check
+        if arbiter_address not in ARBITER_WHITELIST:
+            raise HTTPException(status_code=403, detail="Unauthorized arbiter")
+        
+        # Dismiss dispute and reset job
+        job = db.dismiss_dispute(
+            dispute_id=request.dispute_id,
+            dismissed_by=arbiter_address,
+            reason=request.reason
+        )
+        
+        # Notify worker via WebSocket
+        if job.get("worker_address"):
+            await websocket_manager.broadcast_to_client(job["worker_address"], {
+                "type": "DISPUTE_DISMISSED",
+                "job_id": job["job_id"],
+                "status": "IN_PROGRESS",
+                "message": f"✅ Dispute dismissed: {request.reason}. You can resubmit your work."
+            })
+        
+        return {
+            "success": True,
+            "message": "Dispute dismissed. Worker can retry submission.",
+            "job": job,
+            "reason": request.reason
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Dispute dismissal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to dismiss dispute: {str(e)}")
 
 
 if __name__ == "__main__":

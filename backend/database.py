@@ -298,6 +298,98 @@ class Database:
         """Get all disputes, optionally filtered by status (alias for get_disputes)"""
         return self.get_disputes(status)
     
+    def get_dispute(self, dispute_id: int) -> Optional[Dict]:
+        """Get single dispute by ID with complete job details"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT 
+                    d.*,
+                    j.description as job_description,
+                    j.reference_photos,
+                    j.proof_photos,
+                    j.client_address,
+                    j.worker_address,
+                    j.amount
+                FROM disputes d
+                JOIN jobs j ON d.job_id = j.job_id
+                WHERE d.dispute_id = %s
+            """, (dispute_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                row_dict = dict(row)
+                # Parse JSON fields
+                if row_dict.get('evidence_photos'):
+                    try:
+                        row_dict['evidence_photos'] = json.loads(row_dict['evidence_photos'])
+                    except:
+                        pass
+                if row_dict.get('ai_verdict'):
+                    try:
+                        row_dict['ai_verdict'] = json.loads(row_dict['ai_verdict'])
+                    except:
+                        pass
+                if row_dict.get('reference_photos'):
+                    try:
+                        row_dict['reference_photos'] = json.loads(row_dict['reference_photos'])
+                    except:
+                        pass
+                if row_dict.get('proof_photos'):
+                    try:
+                        row_dict['proof_photos'] = json.loads(row_dict['proof_photos'])
+                    except:
+                        pass
+                return row_dict
+            return None
+    
+    def get_dispute_by_job(self, job_id: int) -> Optional[Dict]:
+        """Get dispute by job ID with complete job details"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT 
+                    d.*,
+                    j.description as job_description,
+                    j.reference_photos,
+                    j.proof_photos,
+                    j.client_address,
+                    j.worker_address,
+                    j.amount
+                FROM disputes d
+                JOIN jobs j ON d.job_id = j.job_id
+                WHERE d.job_id = %s
+                ORDER BY d.raised_at DESC
+                LIMIT 1
+            """, (job_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                row_dict = dict(row)
+                # Parse JSON fields
+                if row_dict.get('evidence_photos'):
+                    try:
+                        row_dict['evidence_photos'] = json.loads(row_dict['evidence_photos'])
+                    except:
+                        pass
+                if row_dict.get('ai_verdict'):
+                    try:
+                        row_dict['ai_verdict'] = json.loads(row_dict['ai_verdict'])
+                    except:
+                        pass
+                if row_dict.get('reference_photos'):
+                    try:
+                        row_dict['reference_photos'] = json.loads(row_dict['reference_photos'])
+                    except:
+                        pass
+                if row_dict.get('proof_photos'):
+                    try:
+                        row_dict['proof_photos'] = json.loads(row_dict['proof_photos'])
+                    except:
+                        pass
+                return row_dict
+            return None
+    
     # ==================== UPDATE ====================
     
     def assign_job(self, job_id: int, worker_address: str) -> Dict:
@@ -316,17 +408,17 @@ class Database:
         return self.get_job(job_id)
     
     def submit_proof(self, job_id: int, proof_photos: List[str]) -> Dict:
-        """Worker submits proof of completion"""
+        """Worker submits proof of completion (allows resubmission for disputed jobs)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE jobs 
                 SET proof_photos = %s, status = 'SUBMITTED'
-                WHERE job_id = %s AND status = 'IN_PROGRESS'
+                WHERE job_id = %s AND status IN ('IN_PROGRESS', 'DISPUTED')
             """, (json.dumps(proof_photos), job_id))
             
             if cursor.rowcount == 0:
-                raise ValueError("Job not found or not in progress")
+                raise ValueError("Job not found or not in progress/disputed")
         
         return self.get_job(job_id)
     
@@ -348,9 +440,18 @@ class Database:
         return self.get_job(job_id)
     
     def dispute_job(self, job_id: int, reason: str, ai_verdict: Dict = None, raised_by: str = "system") -> Dict:
-        """Move job to disputed state and create dispute record"""
+        """Move job to disputed state and create/update dispute record"""
         with self.get_connection() as conn:
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # Check if there's already an existing PENDING dispute for this job
+            cursor.execute("""
+                SELECT dispute_id FROM disputes 
+                WHERE job_id = %s AND status = 'PENDING'
+                ORDER BY raised_at DESC
+                LIMIT 1
+            """, (job_id,))
+            existing_dispute = cursor.fetchone()
             
             # Update job status
             cursor.execute("""
@@ -366,19 +467,71 @@ class Database:
             job = self.get_job(job_id)
             evidence_photos = job.get('proof_photos', [])
             
-            # Create dispute record
-            cursor.execute("""
-                INSERT INTO disputes (job_id, raised_by, reason, ai_verdict, evidence_photos, status)
-                VALUES (%s, %s, %s, %s, %s, 'PENDING')
-            """, (
-                job_id,
-                raised_by,
-                reason,
-                json.dumps(ai_verdict) if ai_verdict else None,
-                json.dumps(evidence_photos) if evidence_photos else None
+            if existing_dispute:
+                # Update existing dispute instead of creating duplicate
+                print(f"📝 Updating existing dispute #{existing_dispute['dispute_id']} for job #{job_id}")
+                cursor.execute("""
+                    UPDATE disputes 
+                    SET reason = %s,
+                        ai_verdict = %s,
+                        evidence_photos = %s,
+                        raised_at = CURRENT_TIMESTAMP
+                    WHERE dispute_id = %s
+                """, (
+                    reason,
+                    json.dumps(ai_verdict) if ai_verdict else None,
+                    json.dumps(evidence_photos) if evidence_photos else None,
+                    existing_dispute['dispute_id']
+                ))
+            else:
+                # Create new dispute record
+                print(f"🆕 Creating new dispute for job #{job_id}")
+                cursor.execute("""
+                    INSERT INTO disputes (job_id, raised_by, reason, ai_verdict, evidence_photos, status)
+                    VALUES (%s, %s, %s, %s, %s, 'PENDING')
+                """, (
+                    job_id,
+                    raised_by,
+                    reason,
+                    json.dumps(ai_verdict) if ai_verdict else None,
+                    json.dumps(evidence_photos) if evidence_photos else None
             ))
         
         return self.get_job(job_id)
+    
+    def dismiss_dispute(self, dispute_id: int, dismissed_by: str, reason: str = None) -> Dict:
+        """Dismiss a dispute (technical issue, not worker's fault) and allow worker to retry"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # Get dispute details
+            cursor.execute("SELECT job_id FROM disputes WHERE dispute_id = %s", (dispute_id,))
+            dispute = cursor.fetchone()
+            if not dispute:
+                raise ValueError("Dispute not found")
+            
+            job_id = dispute['job_id']
+            
+            # Mark dispute as dismissed
+            cursor.execute("""
+                UPDATE disputes 
+                SET status = 'RESOLVED',
+                    resolution = 'DISMISSED',
+                    resolved_by = %s,
+                    resolved_at = CURRENT_TIMESTAMP,
+                    resolution_notes = %s
+                WHERE dispute_id = %s
+            """, (dismissed_by, reason or "Technical issue - not worker's fault", dispute_id))
+            
+            # Reset job back to IN_PROGRESS so worker can resubmit
+            cursor.execute("""
+                UPDATE jobs 
+                SET status = 'IN_PROGRESS'
+                WHERE job_id = %s
+            """, (job_id,))
+            
+            print(f"✅ Dispute #{dispute_id} dismissed. Job #{job_id} reset to IN_PROGRESS.")
+            return self.get_job(job_id)
     
     def resolve_dispute(
         self, 

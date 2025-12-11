@@ -86,6 +86,48 @@ export default function DisputeDetailPage() {
         }
     };
 
+    const handleDismiss = async () => {
+        if (!dispute) return;
+
+        if (!confirm('Dismiss this dispute as a technical issue? The job will be reset to IN_PROGRESS so the worker can retry.')) {
+            return;
+        }
+
+        setIsResolving(true);
+        setError('');
+
+        try {
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/disputes/dismiss`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dispute_id: parseInt(disputeId),
+                        reason: resolutionNotes || 'Technical issue - GPS/location service failure',
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success('✅ Dispute dismissed. Worker can retry submission.', {
+                    duration: 4000,
+                    position: 'top-center',
+                });
+                setTimeout(() => router.push('/tribunal'), 1500);
+            } else {
+                setError(data.error || 'Failed to dismiss dispute');
+            }
+        } catch (err) {
+            console.error('Failed to dismiss dispute:', err);
+            setError('Network error. Please try again.');
+        } finally {
+            setIsResolving(false);
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -140,7 +182,8 @@ export default function DisputeDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InfoField label="Job ID" value={`#${dispute.job_id}`} />
                     <InfoField label="Amount" value={`${dispute.amount} GAS`} />
-                    <InfoField label="Description" value={dispute.description || 'N/A'} />
+                    <InfoField label="Job Description" value={dispute.job_description || 'N/A'} />
+                    <InfoField label="Dispute Reason" value={dispute.reason || 'N/A'} />
                     <InfoField label="Client" value={shortenAddress(dispute.client_address || '')} />
                     <InfoField label="Worker" value={shortenAddress(dispute.worker_address || '')} />
                 </div>
@@ -152,24 +195,80 @@ export default function DisputeDetailPage() {
                 <div className="space-y-4">
                     <InfoField label="Raised By" value={shortenAddress(dispute.raised_by || '')} />
                     <InfoField label="Reason" value={dispute.reason} isLong />
-                    {dispute.ai_verdict && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                AI Analysis Verdict
-                            </label>
-                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                <p className="text-sm text-purple-900">
-                                    {typeof dispute.ai_verdict === 'string' 
-                                        ? dispute.ai_verdict 
-                                        : dispute.ai_verdict?.verdict || dispute.ai_verdict?.summary || JSON.stringify(dispute.ai_verdict, null, 2)}
-                                </p>
-                                {dispute.confidence_score != null && (
-                                    <div className="mt-2">
-                                        <span className="text-xs text-purple-700">
-                                            Confidence: {(dispute.confidence_score * 100).toFixed(1)}%
+                    
+                    {/* AI Verdict Breakdown */}
+                    {dispute.ai_verdict && typeof dispute.ai_verdict === 'object' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    AI Analysis Verdict
+                                </label>
+                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                                            dispute.ai_verdict.verified 
+                                                ? 'bg-green-100 text-green-800' 
+                                                : 'bg-red-100 text-red-800'
+                                        }`}>
+                                            {dispute.ai_verdict.verdict || (dispute.ai_verdict.verified ? 'APPROVED' : 'REJECTED')}
                                         </span>
+                                        {dispute.ai_verdict.confidence != null && (
+                                            <span className="text-xs text-purple-700 font-medium">
+                                                Confidence: {(dispute.ai_verdict.confidence * 100).toFixed(1)}%
+                                            </span>
+                                        )}
                                     </div>
-                                )}
+                                    <p className="text-sm text-purple-900 mb-3">
+                                        {dispute.ai_verdict.reason || 'No reason provided'}
+                                    </p>
+                                    
+                                    {/* Score Breakdown */}
+                                    {dispute.ai_verdict.breakdown && (
+                                        <div className="mt-4 pt-4 border-t border-purple-200">
+                                            <p className="text-xs font-semibold text-purple-900 mb-2">Score Breakdown:</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {Object.entries(dispute.ai_verdict.breakdown).map(([key, value]: [string, any]) => (
+                                                    <div key={key} className="flex justify-between text-xs">
+                                                        <span className="text-purple-700 capitalize">
+                                                            {key.replace(/_/g, ' ')}:
+                                                        </span>
+                                                        <span className={`font-semibold ${
+                                                            value === 0 ? 'text-red-600' : 'text-purple-900'
+                                                        }`}>
+                                                            {value}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Issues List */}
+                                    {dispute.ai_verdict.issues && dispute.ai_verdict.issues.length > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-purple-200">
+                                            <p className="text-xs font-semibold text-purple-900 mb-2">Issues Found:</p>
+                                            <ul className="text-xs text-purple-800 space-y-1">
+                                                {dispute.ai_verdict.issues.map((issue: string, idx: number) => (
+                                                    <li key={idx}>• {issue}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    
+                                    {/* GPS Data */}
+                                    {dispute.ai_verdict.gps_data && (
+                                        <div className="mt-4 pt-4 border-t border-purple-200">
+                                            <p className="text-xs font-semibold text-purple-900 mb-2">GPS Verification:</p>
+                                            <div className="text-xs text-purple-800 space-y-1">
+                                                <div>Distance from job: <strong>{dispute.ai_verdict.gps_data.distance_meters}m</strong></div>
+                                                <div>Max allowed: <strong>{dispute.ai_verdict.gps_data.max_allowed_meters}m</strong></div>
+                                                <div>Status: <strong className={
+                                                    dispute.ai_verdict.gps_data.tier === 'failed' ? 'text-red-600' : 'text-green-600'
+                                                }>{dispute.ai_verdict.gps_data.tier}</strong></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -258,20 +357,31 @@ export default function DisputeDetailPage() {
                         />
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="space-y-3">
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => handleResolve(true)}
+                                disabled={isResolving}
+                                className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isResolving ? 'Processing...' : '✅ Approve Worker'}
+                            </button>
+                            <button
+                                onClick={() => handleResolve(false)}
+                                disabled={isResolving}
+                                className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isResolving ? 'Processing...' : '💰 Refund Client'}
+                            </button>
+                        </div>
+                        
+                        {/* Dismiss button for technical issues */}
                         <button
-                            onClick={() => handleResolve(true)}
+                            onClick={handleDismiss}
                             disabled={isResolving}
-                            className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="w-full bg-yellow-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                            {isResolving ? 'Processing...' : '✅ Approve Worker'}
-                        </button>
-                        <button
-                            onClick={() => handleResolve(false)}
-                            disabled={isResolving}
-                            className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {isResolving ? 'Processing...' : '💰 Refund Client'}
+                            {isResolving ? 'Processing...' : '⚠️ Dismiss (Technical Issue - Reset Job)'}
                         </button>
                     </div>
 
@@ -280,6 +390,7 @@ export default function DisputeDetailPage() {
                         <ul className="list-disc list-inside space-y-1">
                             <li><strong>Approve Worker:</strong> Worker receives 95% of payment (5% platform fee). Job marked as completed.</li>
                             <li><strong>Refund Client:</strong> Client receives 100% refund. Worker receives nothing. Job marked as failed.</li>
+                            <li><strong>Dismiss:</strong> Technical issue (GPS failure, system error). Job resets to IN_PROGRESS. Worker can retry without penalty.</li>
                         </ul>
                     </div>
                 </div>

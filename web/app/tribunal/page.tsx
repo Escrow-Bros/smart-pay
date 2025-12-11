@@ -132,7 +132,7 @@ export default function TribunalDashboard() {
                                             </span>
                                         </div>
                                         <h3 className="text-sm font-medium text-gray-900 truncate mb-1">
-                                            {dispute.description || 'No description'}
+                                            {dispute.job_description || 'No description'}
                                         </h3>
                                         <p className="text-sm text-gray-600 line-clamp-2">
                                             {dispute.reason}

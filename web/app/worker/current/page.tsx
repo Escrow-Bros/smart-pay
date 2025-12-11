@@ -621,12 +621,16 @@ export default function WorkerCurrentJobPage() {
                             </div>
                         )}
 
-                        {/* Only show submission form if job is IN_PROGRESS (not submitted yet) */}
-                        {activeJob.status === 'IN_PROGRESS' && (
+                        {/* Show submission form if job is IN_PROGRESS or DISPUTED (allow resubmission) */}
+                        {(activeJob.status === 'IN_PROGRESS' || activeJob.status === 'DISPUTED') && (
                             <div className="border-t border-slate-700 pt-6">
-                                <h3 className="text-white font-semibold mb-3">Submit Proof of Completion</h3>
+                                <h3 className="text-white font-semibold mb-3">
+                                    {activeJob.status === 'DISPUTED' ? 'Resubmit Proof of Completion' : 'Submit Proof of Completion'}
+                                </h3>
                                 <p className="text-slate-400 text-sm mb-4">
-                                    Upload photos showing the completed work to receive payment.
+                                    {activeJob.status === 'DISPUTED' 
+                                        ? 'Your previous submission was disputed. Please upload new photos addressing the issues.'
+                                        : 'Upload photos showing the completed work to receive payment.'}
                                 </p>
 
                                 <ImageUpload
