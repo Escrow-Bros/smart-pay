@@ -12,14 +12,40 @@ class Database:
     
     def __init__(self, connection_string: str = None):
         """Initialize database connection pool"""
+        import socket
+        
         self.connection_string = connection_string or os.getenv("DATABASE_URL")
         
         if not self.connection_string:
             raise ValueError("DATABASE_URL environment variable not set")
         
+        # Parse connection string to get host
+        # Format: postgresql://user:pass@host:port/db
+        try:
+            # Extract host from connection string
+            host_start = self.connection_string.find('@') + 1
+            host_end = self.connection_string.find(':', host_start)
+            if host_end == -1:
+                host_end = self.connection_string.find('/', host_start)
+            hostname = self.connection_string[host_start:host_end]
+            
+            # Resolve to IPv4 address
+            ipv4_addr = socket.getaddrinfo(hostname, None, socket.AF_INET)[0][4][0]
+            
+            # Add hostaddr parameter to force IPv4
+            connection_params = self.connection_string
+            if '?' in connection_params:
+                connection_params += f'&hostaddr={ipv4_addr}'
+            else:
+                connection_params += f'?hostaddr={ipv4_addr}'
+            
+            print(f"🔗 Connecting to Supabase via IPv4: {ipv4_addr}")
+        except Exception as e:
+            print(f"⚠️  Could not resolve IPv4, using original connection string: {e}")
+            connection_params = self.connection_string
+        
         # Create connection pool (min 1, max 10 connections)
-        # Connection is made lazily on first query
-        self.pool = SimpleConnectionPool(1, 10, self.connection_string)
+        self.pool = SimpleConnectionPool(1, 10, connection_params)
         self._init_db()
     
     @contextmanager
@@ -217,6 +243,44 @@ class Database:
             """, (status,))
             return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
     
+    def get_worker_active_jobs(self, worker_address: str) -> List[Dict]:
+        """Get worker's active jobs (IN_PROGRESS + SUBMITTED + DISPUTED)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT * FROM jobs 
+                WHERE worker_address = %s 
+                AND status IN ('IN_PROGRESS', 'SUBMITTED', 'DISPUTED')
+                ORDER BY assigned_at DESC
+            """, (worker_address,))
+            return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
+    
+    def get_all_worker_jobs(self, worker_address: str) -> List[Dict]:
+        """Get all jobs for a worker (any status)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT * FROM jobs 
+                WHERE worker_address = %s
+                ORDER BY assigned_at DESC
+            """, (worker_address,))
+            return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
+    
+    def get_worker_stats(self, worker_address: str) -> Dict:
+        """Get worker statistics"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_jobs,
+                    COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_jobs,
+                    COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END), 0) as total_earnings
+                FROM jobs 
+                WHERE worker_address = %s
+            """, (worker_address,))
+            row = cursor.fetchone()
+            return dict(row) if row else {"total_jobs": 0, "completed_jobs": 0, "total_earnings": 0}
+    
     def get_disputes(self, status: str = None) -> List[Dict]:
         """Get disputes, optionally filtered by status"""
         with self.get_connection() as conn:
@@ -255,6 +319,10 @@ class Database:
                 results.append(row_dict)
             
             return results
+    
+    def get_all_disputes(self, status: str = None) -> List[Dict]:
+        """Get all disputes, optionally filtered by status (alias for get_disputes)"""
+        return self.get_disputes(status)
     
     # ==================== UPDATE ====================
     
