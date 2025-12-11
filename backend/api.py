@@ -423,7 +423,7 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
                 )
             
             if job_status.get("status_name") == "COMPLETED":
-                print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 15}s")
+                print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 20}s")
                 # Update database to COMPLETED
                 db.complete_job(job_id=job_id)
                 
@@ -890,7 +890,7 @@ async def verify_payment_status(job_id: int):
         print(f"❌ Error verifying payment for job #{job_id}: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to verify payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify payment: {str(e)}") from e
 
 
 @app.get("/api/jobs/{job_id}/status")

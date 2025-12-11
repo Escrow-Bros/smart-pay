@@ -18,7 +18,7 @@ export default function ChatMessage({ role, content, timestamp }: ChatMessagePro
   // Format time on client only to avoid hydration mismatch
   useEffect(() => {
     if (timestamp) {
-      const time = timestamp.toLocaleTimeString([], { 
+      const time = timestamp.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',
         hour12: false // Use 24-hour format for consistency

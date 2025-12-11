@@ -28,7 +28,7 @@ interface ExtractedData {
 }
 
 export default function ConversationalJobCreator() {
-  const { state, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages } = useApp();
+  const { state, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages, fetchData } = useApp();
 
   // Prevent hydration errors by only rendering after mount
   const [mounted, setMounted] = useState(false);

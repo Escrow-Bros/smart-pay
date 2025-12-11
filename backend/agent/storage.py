@@ -38,7 +38,6 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
     try:
         import boto3
         from botocore.exceptions import ClientError
-        from boto3.s3.transfer import TransferConfig
         from botocore.client import Config
         
         print(f"[IPFS] Initializing S3 client for 4Everland...")
@@ -165,7 +164,7 @@ def upload_to_ipfs_api(image_bytes: bytes, filename: str = "proof.jpg") -> Optio
             print(f"❌ Error: No IPFS hash in response: {result}")
             return None
             
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         print(f"❌ Error uploading to 4Everland API: {e}")
         return None
     except Exception as e:

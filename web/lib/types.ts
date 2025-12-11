@@ -4,7 +4,7 @@ export interface VerificationPlan {
     rejection_criteria: string[];
     visual_checks: string[];
     location_required: boolean;
-    comparison_mode: string;
+    comparison_mode: 'before_after' | 'reference_match' | 'checklist';
 }
 
 export interface JobDict {
@@ -43,7 +43,7 @@ export interface JobDict {
             reasoning: string;
         };
     } | null;
-    verification_plan?: VerificationPlan;
+    verification_plan?: VerificationPlan | null;
 }
 
 export interface WorkerStats {

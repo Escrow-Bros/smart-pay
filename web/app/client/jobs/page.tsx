@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
 
@@ -94,12 +95,12 @@ export default function ClientJobsPage() {
                     </svg>
                     <h3 className="text-lg font-semibold text-slate-300 mb-2">No Jobs Posted Yet</h3>
                     <p className="text-slate-400 mb-4">You haven't created any job postings yet.</p>
-                    <a
+                    <Link
                         href="/client/create"
                         className="inline-block bg-cyan-600 hover:bg-cyan-500 text-white font-semibold px-6 py-2.5 rounded-lg transition-all active:scale-95"
                     >
                         Create Your First Job
-                    </a>
+                    </Link>
                 </div>
             )}
         </div>

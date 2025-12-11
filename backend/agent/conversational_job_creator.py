@@ -4,6 +4,7 @@ Multi-turn dialogue system for natural job creation through chat.
 Uses Sudo AI SDK with structured output for reliable conversation flow.
 """
 import json
+import re
 import threading
 from typing import Dict, List, Optional, Any
 from backend.agent.paralegal import get_ai_client
@@ -266,9 +267,8 @@ class ConversationalJobCreator:
             # Try to extract partial data if possible
             try:
                 # Sometimes the JSON is truncated or has trailing content
-                # Try to find the JSON object boundaries
-                import re
-                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                # Try to find the JSON object boundaries (non-greedy match)
+                json_match = re.search(r'\{.*?\}', response_text, re.DOTALL)
                 if json_match:
                     cleaned_json = json_match.group(0)
                     response_data = json.loads(cleaned_json)

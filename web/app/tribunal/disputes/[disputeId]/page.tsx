@@ -73,7 +73,8 @@ export default function DisputeDetailPage() {
                     duration: 5000,
                     position: 'top-center',
                 });
-                router.push('/tribunal');
+                // Brief delay to let user see the success toast
+                setTimeout(() => router.push('/tribunal'), 1500);
             } else {
                 setError(data.error || 'Failed to resolve dispute');
             }
