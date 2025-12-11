@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 import time
+import logging
 from collections import defaultdict
 from threading import Lock
 
@@ -68,6 +69,9 @@ arbiter_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 # Arbiter whitelist - authorized addresses that can resolve disputes
 # In production, this should be stored in database with role management
 ARBITER_WHITELIST = set()
+
+# Task tracking for recovery and background jobs
+recovery_tasks: set = set()
 
 def load_arbiter_whitelist():
     """Load arbiter addresses from environment variables"""
@@ -332,6 +336,52 @@ class ConnectionManager:
                             pass
 
 websocket_manager = ConnectionManager()
+
+# ==================== STARTUP RECOVERY ====================
+
+@app.on_event("startup")
+async def startup_recovery():
+    """
+    Recover pending jobs after server restart.
+    Restarts blockchain monitors for any jobs stuck in PAYMENT_PENDING.
+    """
+    print("🔄 Starting recovery scan for pending jobs...")
+    
+    try:
+        pending_jobs = db.get_jobs_by_status("PAYMENT_PENDING")
+        print(f"   Found {len(pending_jobs)} jobs in PAYMENT_PENDING state")
+        
+        recovered = 0
+        for job in pending_jobs:
+            tx_hash = job.get('tx_hash')
+            job_id = job.get('job_id')
+            
+            if tx_hash and job_id:
+                print(f"   ↳ Restarting monitor for Job #{job_id} (tx: {tx_hash[:16]}...)")
+                # Restart the background monitor task
+                task = asyncio.create_task(
+                    monitor_transaction_confirmation(job_id, tx_hash)
+                )
+                # Track task for lifecycle management
+                recovery_tasks.add(task)
+                task.add_done_callback(recovery_tasks.discard)
+                # Add exception handler (capture job_id by value to avoid closure issue)
+                task.add_done_callback(
+                    lambda t, jid=job_id: logging.error(f"Recovery task exception for job {jid}", exc_info=t.exception()) if t.exception() else None
+                )
+                recovered += 1
+            else:
+                print(f"   ⚠️  Job #{job_id} missing tx_hash, cannot recover")
+        
+        if recovered > 0:
+            print(f"✅ Recovery complete: Restarted {recovered} transaction monitors")
+        else:
+            print("✅ Recovery complete: No jobs needed recovery")
+            
+    except Exception:
+        # Use logging.exception for better stack trace visibility
+        logging.exception("Recovery failed")
+        # Don't crash the server on recovery failure
 
 # ==================== BACKGROUND TASK: TX MONITORING ====================
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { GlobalState, UserMode, JobDict, WorkerStats, UploadedImage } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 import { initializePriceCache, getGasUsdPrice } from '@/lib/currency';
+import toast from 'react-hot-toast';
 
 const CLIENT_ADDR = process.env.NEXT_PUBLIC_CLIENT_ADDR || '';
 const WORKER_ADDR = process.env.NEXT_PUBLIC_WORKER_ADDR || '';
@@ -181,12 +182,183 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Keep fetchData ref up-to-date to prevent stale closures in WebSocket handler
+    const fetchDataRef = useRef(fetchData);
+    useEffect(() => {
+        fetchDataRef.current = fetchData;
+    });
+
     // Auto-fetch data when wallet changes or after restoration
     useEffect(() => {
         if (state.walletAddress && state.userMode && isInitialized) {
             fetchData();
         }
     }, [state.walletAddress, state.userMode, isInitialized]);
+
+    // Global WebSocket connection for real-time updates with auto-reconnect
+    const wsRef = useRef<WebSocket | null>(null);
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const reconnectAttemptsRef = useRef(0);
+    const maxReconnectAttempts = 10;
+    const isIntentionalClose = useRef(false);
+    
+    useEffect(() => {
+        if (!state.walletAddress) return;
+
+        const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        // Ensure apiUrl has a protocol before replacing
+        if (!apiUrl.match(/^https?:\/\//)) {
+            const defaultProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https://' : 'http://';
+            apiUrl = defaultProtocol + apiUrl;
+        }
+        
+        const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
+
+        const connectWebSocket = () => {
+            // Don't reconnect if intentionally closing or max attempts reached
+            if (isIntentionalClose.current || reconnectAttemptsRef.current >= maxReconnectAttempts) {
+                return;
+            }
+
+            try {
+                const ws = new WebSocket(`${wsUrl}/ws/${state.walletAddress}`);
+                
+                // Set connection timeout (30 seconds)
+                const connectionTimeout = setTimeout(() => {
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        console.warn('⚠️ WebSocket connection timeout');
+                        ws.close();
+                    }
+                }, 30000);
+                
+                ws.onopen = () => {
+                    clearTimeout(connectionTimeout);
+                    console.log('🔌 WebSocket connected globally');
+                    reconnectAttemptsRef.current = 0; // Reset on successful connection
+                };
+                
+                ws.onmessage = (event) => {
+                    let data;
+                    try {
+                        data = JSON.parse(event.data);
+                    } catch (e) {
+                        console.error('Failed to parse WebSocket message:', e);
+                        return;
+                    }
+                    console.log('📨 WebSocket message:', data);
+                    
+                    // Handle different event types
+                    if (data.type === 'JOB_COMPLETED') {
+                        toast.dismiss(`job-${data.job_id}`);
+                        toast.success(`🎉 Job #${data.job_id} completed! Payment confirmed on blockchain.`, {
+                            duration: 5000,
+                            position: 'top-right',
+                        });
+                        // Auto-refresh data to update UI (use ref to avoid stale closure)
+                        fetchDataRef.current();
+                    } else if (data.type === 'PAYMENT_PENDING') {
+                        toast.loading(`⏳ Job #${data.job_id} payment pending confirmation...`, {
+                            id: `job-${data.job_id}`,
+                            duration: Infinity,  // Dismissed explicitly by JOB_COMPLETED/PAYMENT_TIMEOUT
+                        });
+                    } else if (data.type === 'PAYMENT_TIMEOUT') {
+                        toast.dismiss(`job-${data.job_id}`);
+                        toast(`⚠️ Job #${data.job_id}: ${data.message}`, {
+                            duration: 8000,
+                            icon: '⏱️',
+                        });
+                    } else if (data.type === 'JOB_STATUS_UPDATE') {
+                        toast.dismiss(`job-${data.job_id}`);
+                        toast(`📋 Job #${data.job_id}: ${data.message}`, {
+                            duration: 4000,
+                            icon: 'ℹ️',
+                        });
+                        // Auto-refresh data to update UI (use ref to avoid stale closure)
+                        fetchDataRef.current();
+                    } else if (data.type === 'DISPUTE_RAISED') {
+                        toast(`⚖️ Dispute raised on Job #${data.job_id}`, {
+                            duration: 6000,
+                            icon: '⚠️',
+                        });
+                        fetchDataRef.current();
+                    } else if (data.type === 'DISPUTE_RESOLVED') {
+                        toast.success(`✅ Dispute resolved for Job #${data.job_id}`, {
+                            duration: 5000,
+                        });
+                        fetchDataRef.current();
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    clearTimeout(connectionTimeout);
+                    console.error('❌ WebSocket error:', error);
+                    // Don't show error toast on every reconnect attempt
+                    if (reconnectAttemptsRef.current === 0) {
+                        toast.error('Connection to real-time updates failed. Retrying...', {
+                            duration: 3000,
+                        });
+                    }
+                };
+                
+                ws.onclose = (event) => {
+                    clearTimeout(connectionTimeout);
+                    console.log('🔌 WebSocket disconnected', event.code, event.reason);
+                    
+                    // Don't reconnect if this was an intentional close
+                    if (isIntentionalClose.current) {
+                        return;
+                    }
+                    
+                    // Attempt reconnection with exponential backoff
+                    reconnectAttemptsRef.current += 1;
+                    
+                    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+                        console.error('❌ Max WebSocket reconnection attempts reached');
+                        toast.error('Unable to establish real-time connection. Please refresh the page.', {
+                            duration: 8000,
+                        });
+                        return;
+                    }
+                    
+                    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+                    const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000);
+                    console.log(`🔄 Reconnecting in ${backoffDelay / 1000}s... (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
+                    
+                    reconnectTimeoutRef.current = setTimeout(() => {
+                        connectWebSocket();
+                    }, backoffDelay);
+                };
+                
+                wsRef.current = ws;
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
+                // Graceful degradation - app still works without WebSocket
+                toast.error('Real-time updates unavailable. You can still use the app.', {
+                    duration: 5000,
+                });
+            }
+        };
+
+        // Initial connection
+        isIntentionalClose.current = false;
+        reconnectAttemptsRef.current = 0;  // Reset failure count for new wallet
+        connectWebSocket();
+        
+        // Cleanup on unmount or wallet change
+        return () => {
+            isIntentionalClose.current = true;
+            
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
+            
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, [state.walletAddress]);
 
     // Initialize GAS/USD price cache on mount and refresh periodically
     useEffect(() => {

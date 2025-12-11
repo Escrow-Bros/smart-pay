@@ -55,76 +55,11 @@ export default function ConversationalJobCreator() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pendingMessageRef = useRef<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  // WebSocket connection for real-time updates
-  useEffect(() => {
-    if (!state.walletAddress) return;
-
-    const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
-    const ws = new WebSocket(`${wsUrl}/ws/${state.walletAddress}`);
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-    };
-    
-    ws.onmessage = (event) => {
-      let data;
-      try {
-        data = JSON.parse(event.data);
-      } catch (e) {
-        console.error('Failed to parse WebSocket message:', e);
-        return;
-      }
-      console.log('WebSocket message:', data);
-      
-      if (data.type === 'JOB_COMPLETED') {
-        toast.dismiss(`job-${data.job_id}`);
-        toast.success(`🎉 Job #${data.job_id} completed! Payment confirmed on blockchain.`, {
-          duration: 5000,
-          position: 'top-right',
-        });
-      } else if (data.type === 'PAYMENT_PENDING') {
-        toast.loading(`⏳ Job #${data.job_id} payment pending confirmation...`, {
-          id: `job-${data.job_id}`,
-          duration: 15000,
-        });
-      } else if (data.type === 'PAYMENT_TIMEOUT') {
-        toast.dismiss(`job-${data.job_id}`);
-        toast(`⚠️ Job #${data.job_id}: ${data.message}`, {
-          duration: 8000,
-          icon: '⏱️',
-        });
-      } else if (data.type === 'JOB_STATUS_UPDATE') {
-        toast.dismiss(`job-${data.job_id}`);
-        toast(`📋 Job #${data.job_id}: ${data.message}`, {
-          duration: 4000,
-          icon: 'ℹ️',
-        });
-      }
-    };
-    
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-    
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-    
-    wsRef.current = ws;
-    
-    return () => {
-      ws.close();
-    };
-  }, [state.walletAddress]);
 
   const handleSendMessage = useCallback(async (userMessage: string, imageUploaded?: boolean) => {
     if (isLoading) {
