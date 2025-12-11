@@ -12,37 +12,28 @@ class Database:
     
     def __init__(self, connection_string: str = None):
         """Initialize database connection pool"""
-        import socket
-        
         self.connection_string = connection_string or os.getenv("DATABASE_URL")
         
         if not self.connection_string:
             raise ValueError("DATABASE_URL environment variable not set")
         
-        # Parse connection string to get host
-        # Format: postgresql://user:pass@host:port/db
-        try:
-            # Extract host from connection string
-            host_start = self.connection_string.find('@') + 1
-            host_end = self.connection_string.find(':', host_start)
-            if host_end == -1:
-                host_end = self.connection_string.find('/', host_start)
-            hostname = self.connection_string[host_start:host_end]
-            
-            # Resolve to IPv4 address
-            ipv4_addr = socket.getaddrinfo(hostname, None, socket.AF_INET)[0][4][0]
-            
-            # Add hostaddr parameter to force IPv4
-            connection_params = self.connection_string
-            if '?' in connection_params:
-                connection_params += f'&hostaddr={ipv4_addr}'
-            else:
-                connection_params += f'?hostaddr={ipv4_addr}'
-            
-            print(f"🔗 Connecting to Supabase via IPv4: {ipv4_addr}")
-        except Exception as e:
-            print(f"⚠️  Could not resolve IPv4, using original connection string: {e}")
-            connection_params = self.connection_string
+        # Use Supabase Pooler for better compatibility with serverless/IPv6 environments
+        # Replace direct connection with pooler connection
+        connection_params = self.connection_string
+        
+        # If using direct db.xxx.supabase.co, switch to pooler
+        if 'db.eztwselolejaenphcevb.supabase.co:5432' in connection_params:
+            # Use Transaction pooler (port 6543) instead of direct connection (5432)
+            connection_params = connection_params.replace(
+                'db.eztwselolejaenphcevb.supabase.co:5432',
+                'aws-0-us-east-1.pooler.supabase.com:6543'
+            )
+            # Also need to update the user format for pooler
+            connection_params = connection_params.replace(
+                'postgresql://postgres:',
+                'postgresql://postgres.eztwselolejaenphcevb:'
+            )
+            print("🔗 Using Supabase Transaction Pooler for connection")
         
         # Create connection pool (min 1, max 10 connections)
         self.pool = SimpleConnectionPool(1, 10, connection_params)
