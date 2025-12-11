@@ -1371,13 +1371,26 @@ async def submit_proof(request: SubmitProofRequest):
             breakdown = verification.get("breakdown", {})
             if breakdown:
                 failed_checks = []
-                if breakdown.get("location_match") == "FAILED":
+                
+                # Check each component score (lower scores indicate failures)
+                # GPS Quality: max 25 points, failing if < 10
+                if breakdown.get("gps_quality", 25) < 10:
+                    failed_checks.append("GPS quality failed")
+                
+                # Visual Location: max 20 points, failing if < 8
+                if breakdown.get("visual_location", 20) < 8:
                     failed_checks.append("Location verification failed")
-                if breakdown.get("transformation_check") == "FAILED":
+                
+                # Transformation: max 25 points, failing if < 15
+                if breakdown.get("transformation", 25) < 15:
                     failed_checks.append("No visible work transformation")
-                if breakdown.get("coverage_check") == "FAILED":
+                
+                # Coverage: max 15 points, failing if < 7
+                if breakdown.get("coverage", 15) < 7:
                     failed_checks.append("Incomplete coverage of work area")
-                if breakdown.get("requirements_check") == "FAILED":
+                
+                # Requirements: max 15 points, failing if < 7
+                if breakdown.get("requirements", 15) < 7:
                     failed_checks.append("Requirements not met")
                 
                 if failed_checks:
