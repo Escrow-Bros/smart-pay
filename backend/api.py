@@ -21,7 +21,15 @@ from collections import defaultdict
 from threading import Lock
 
 # Internal imports
-from backend.database import get_db
+from backend.database import Database
+
+# Database instance - Supabase PostgreSQL only
+db = Database()
+
+def get_db():
+    """Dependency to get database instance"""
+    return db
+
 from backend.agent.paralegal import analyze_job_request
 from backend.agent.eye import UniversalEyeAgent, verify_work
 from backend.agent.storage import upload_to_ipfs

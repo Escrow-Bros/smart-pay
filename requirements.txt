@@ -46,3 +46,4 @@ sqlalchemy>=2.0.0
 # Utilities
 typing_extensions>=4.10.0
 packaging>=24.0
+psycopg2-binary

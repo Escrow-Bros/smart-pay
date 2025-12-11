@@ -69,6 +69,10 @@ services:
         sync: false  # Add manually in Render dashboard
       - key: EVERLAND_ENDPOINT
         value: https://endpoint.4everland.co/
+      
+      # Database Configuration (Supabase PostgreSQL)
+      - key: DATABASE_URL
+        sync: false  # Add manually: postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
     
     healthCheckPath: /health
     

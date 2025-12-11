@@ -28,6 +28,20 @@ class AgentConfig:
     
     # Required Fields for Job Analysis
     REQUIRED_FIELDS = ["task", "task_description", "location", "price_amount", "price_currency"]
+
+
+class DatabaseConfig:
+    """Configuration for Database Connection"""
+    
+    # Database URL (Supabase PostgreSQL - REQUIRED)
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    
+    if not DATABASE_URL:
+        raise ValueError(
+            "DATABASE_URL environment variable is required.\n"
+            "Please set it in your .env file:\n"
+            "DATABASE_URL=postgresql://postgres:password@db.xxx.supabase.co:5432/postgres"
+        )
     
     @classmethod
     def validate(cls):
