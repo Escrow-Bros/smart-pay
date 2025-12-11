@@ -10,9 +10,10 @@ httpx-sse>=0.4.0
 requests==2.31.0
 urllib3>=2.2.0
 # Fix pycares/aiodns compatibility issue for Python 3.12
-# Pin to prevent pycares 5.x which has breaking changes
-pycares==4.4.0
-aiodns==3.2.0
+# Use <5.0 to prevent pycares 5.x which has breaking changes (removed ares_query_a_result)
+# aiodns 3.5.0 is required by neo-mamba 3.1.0
+pycares>=4.4.0,<5.0
+aiodns==3.5.0
 
 # FastAPI Backend
 fastapi>=0.110.0
