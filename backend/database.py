@@ -323,12 +323,26 @@ class Database:
         
         return self.get_job(job_id)
     
-    def dispute_job(self, job_id: int, reason: str) -> Dict:
-        """Mark job as disputed"""
+    def dispute_job(self, job_id: int, reason: str, ai_verdict: Optional[Dict] = None, raised_by: str = "system") -> Dict:
+        """
+        Mark job as disputed and create dispute record.
+        
+        Args:
+            job_id: Job ID
+            reason: Reason for dispute
+            ai_verdict: Optional AI verification result that triggered the dispute
+            raised_by: Who raised the dispute (default: "system" for AI rejections)
+        """
+        # Get job details first to know who's involved
+        job = self.get_job(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+        
         verification_result = {"disputed": True, "reason": reason, "verified": False}
         verification_summary = self._build_verification_summary(verification_result, reason)
         
         with self.get_connection() as conn:
+            # Update job status to DISPUTED
             conn.execute("""
                 UPDATE jobs 
                 SET status = 'DISPUTED',
@@ -336,6 +350,23 @@ class Database:
                     verification_summary = ?
                 WHERE job_id = ?
             """, (json.dumps(verification_result), json.dumps(verification_summary), job_id))
+            
+            # Create dispute record
+            cursor = conn.execute("""
+                INSERT INTO disputes (
+                    job_id, raised_by, reason, 
+                    ai_verdict, evidence_photos, status
+                ) VALUES (?, ?, ?, ?, ?, 'PENDING')
+            """, (
+                job_id,
+                raised_by,
+                reason,
+                json.dumps(ai_verdict) if ai_verdict else None,
+                json.dumps(job.get('proof_photos', [])) if job.get('proof_photos') else None
+            ))
+            
+            dispute_id = cursor.lastrowid
+            print(f"✅ Created dispute #{dispute_id} for job #{job_id}: {reason[:100]}")
         
         return self.get_job(job_id)
     

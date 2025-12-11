@@ -385,10 +385,10 @@ async def startup_recovery():
 
 # ==================== BACKGROUND TASK: TX MONITORING ====================
 
-async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attempts: int = 10):
+async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attempts: int = 15):
     """
     Background task to monitor blockchain transaction confirmation.
-    Polls the blockchain every 15 seconds for up to 2.5 minutes.
+    Polls the blockchain every 20 seconds for up to 5 minutes.
     Updates job status from PAYMENT_PENDING to COMPLETED once confirmed.
     Broadcasts updates via WebSocket to connected clients.
     """
@@ -401,11 +401,12 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
         return
     
     for attempt in range(max_attempts):
-        await asyncio.sleep(15)  # Wait 15 seconds between checks
+        await asyncio.sleep(20)  # Wait 20 seconds between checks
         
         try:
             # Check on-chain job status
             job_status = await mcp.get_job_status(job_id)
+            print(f"📊 Job #{job_id} blockchain status check (attempt {attempt + 1}/{max_attempts}): {job_status.get('status_name')} (code: {job_status.get('status_code')})")
             
             # Broadcast pending status update via WebSocket
             if job.get("worker_address"):
@@ -416,12 +417,13 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
                         "job_id": job_id,
                         "status": "PAYMENT_PENDING",
                         "message": f"Confirming transaction... (attempt {attempt + 1}/{max_attempts})",
-                        "tx_hash": tx_hash
+                        "tx_hash": tx_hash,
+                        "blockchain_status": job_status.get('status_name')
                     }
                 )
             
             if job_status.get("status_name") == "COMPLETED":
-                print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 15}s")
+                print(f"✅ Transaction confirmed for job #{job_id} after {(attempt + 1) * 20}s")
                 # Update database to COMPLETED
                 db.complete_job(job_id=job_id)
                 
@@ -441,14 +443,14 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
                 
                 return
             
-            print(f"⏳ Job #{job_id} still pending... (attempt {attempt + 1}/{max_attempts})")
+            print(f"⏳ Job #{job_id} still pending... (attempt {attempt + 1}/{max_attempts}, elapsed: {(attempt + 1) * 20}s)")
             
         except Exception as e:
             print(f"⚠️  Error checking job #{job_id} status: {e}")
             continue
     
     # If we get here, transaction didn't confirm in time
-    print(f"⚠️  WARNING: Job #{job_id} transaction {tx_hash} not confirmed after {max_attempts * 15}s")
+    print(f"⚠️  WARNING: Job #{job_id} transaction {tx_hash} not confirmed after {max_attempts * 20}s")
     print("   Job remains in PAYMENT_PENDING status. Manual verification recommended.")
     
     # Notify worker of timeout
@@ -793,6 +795,104 @@ async def get_worker_stats(worker_address: str):
         }
 
 
+@app.post("/api/jobs/{job_id}/verify-payment")
+async def verify_payment_status(job_id: int):
+    """
+    Manually verify and fix stuck payment jobs.
+    Checks blockchain status and syncs with database if needed.
+    
+    Use this endpoint when a job is stuck in PAYMENT_PENDING.
+    """
+    try:
+        job = db.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        print(f"\n🔍 ===== MANUAL PAYMENT VERIFICATION =====")
+        print(f"   Job ID: #{job_id}")
+        print(f"   DB Status: {job['status']}")
+        print(f"   TX Hash: {job.get('tx_hash', 'N/A')}")
+        print(f"   Worker: {job.get('worker_address', 'N/A')}")
+        print(f"   Amount: {job.get('amount', 0)} GAS")
+        
+        # Check blockchain status
+        blockchain_status = await mcp.get_job_status(job_id)
+        print(f"   Blockchain Status: {blockchain_status.get('status_name')} (code: {blockchain_status.get('status_code')})")
+        
+        # Get detailed blockchain info
+        try:
+            blockchain_details = await mcp.get_job_details(job_id)
+            print(f"   Blockchain Amount: {blockchain_details.get('amount_locked', 0) / 100_000_000} GAS")
+            print(f"   Blockchain Worker: {blockchain_details.get('worker_address', 'N/A')}")
+        except Exception as e:
+            print(f"   ⚠️  Could not fetch blockchain details: {e}")
+            blockchain_details = None
+        
+        diagnosis = {
+            "job_id": job_id,
+            "db_status": job["status"],
+            "blockchain_status": blockchain_status.get("status_name"),
+            "blockchain_code": blockchain_status.get("status_code"),
+            "tx_hash": job.get("tx_hash"),
+            "explorer_url": f"https://dora.coz.io/transaction/neo3/testnet/{job.get('tx_hash')}" if job.get("tx_hash") else None,
+            "synced": False,
+            "action_taken": None,
+            "blockchain_details": blockchain_details
+        }
+        
+        # If blockchain shows COMPLETED but DB doesn't, sync them
+        if blockchain_status.get("status_name") == "COMPLETED" and job["status"] == "PAYMENT_PENDING":
+            print(f"   ✅ Blockchain shows COMPLETED but DB shows PAYMENT_PENDING. Syncing...")
+            db.complete_job(job_id=job_id)
+            
+            # Notify worker of completion
+            if job.get("worker_address"):
+                await websocket_manager.broadcast_to_client(
+                    job["worker_address"],
+                    {
+                        "type": "JOB_COMPLETED",
+                        "job_id": job_id,
+                        "status": "COMPLETED",
+                        "message": "Payment confirmed! Job completed successfully.",
+                        "tx_hash": job.get("tx_hash")
+                    }
+                )
+            
+            diagnosis["synced"] = True
+            diagnosis["action_taken"] = "Successfully synced DB status to COMPLETED"
+            print(f"   ✅ Job #{job_id} synced to COMPLETED")
+        
+        elif job["status"] == "PAYMENT_PENDING":
+            # Still pending on blockchain
+            if blockchain_status.get("status_name") == "LOCKED":
+                diagnosis["action_taken"] = "Transaction still processing on blockchain. Payment was broadcasted but not yet confirmed."
+                print(f"   ⏳ Job #{job_id} transaction still processing on blockchain")
+            elif blockchain_status.get("status_name") == "OPEN":
+                diagnosis["action_taken"] = "ERROR: Blockchain shows OPEN but should be LOCKED. Payment transaction may have failed."
+                print(f"   ❌ Job #{job_id} has incorrect blockchain status - payment transaction may have failed!")
+            else:
+                diagnosis["action_taken"] = f"Unexpected blockchain status: {blockchain_status.get('status_name')}. Manual investigation needed."
+                print(f"   ⚠️  Job #{job_id} has unexpected status: {blockchain_status.get('status_name')}")
+        
+        elif job["status"] == "COMPLETED":
+            diagnosis["synced"] = True
+            diagnosis["action_taken"] = "Job already completed successfully"
+        
+        else:
+            diagnosis["action_taken"] = f"Job is in {job['status']} status, not related to payment processing"
+        
+        print(f"   Action: {diagnosis['action_taken']}")
+        print(f"========================================\n")
+        
+        return diagnosis
+        
+    except Exception as e:
+        print(f"❌ Error verifying payment for job #{job_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to verify payment: {e!s}") from e
+
+
 @app.get("/api/jobs/{job_id}/status")
 async def get_job_status(job_id: int):
     """
@@ -945,19 +1045,50 @@ async def analyze_job(
 async def upload_to_ipfs_endpoint(file: UploadFile = File(...)):
     """Upload a file to IPFS and return the hash URL"""
     try:
+        print(f"\n📤 ===== IPFS UPLOAD REQUEST =====")
+        print(f"   Filename: {file.filename}")
+        print(f"   Content-Type: {file.content_type}")
+        
         file_bytes = await file.read()
+        file_size_mb = len(file_bytes) / (1024 * 1024)
+        
+        print(f"   File size: {file_size_mb:.2f} MB ({len(file_bytes)} bytes)")
+        
         if len(file_bytes) > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
-            
-        # Generate a unique filename
-        filename = f"upload_{os.urandom(4).hex()}.{file.filename.split('.')[-1]}"
         
-        ipfs_url = upload_to_ipfs(file_bytes, filename)
-        if not ipfs_url:
-            raise HTTPException(status_code=500, detail="Failed to upload to IPFS")
+        if len(file_bytes) == 0:
+            raise HTTPException(status_code=400, detail="File is empty")
             
+        # Generate a unique filename with timestamp to reduce collision probability
+        extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+        filename = f"upload_{int(time.time())}_{os.urandom(4).hex()}.{extension}"
+        print(f"   Generated filename: {filename}")
+        
+        # Check credentials
+        print(f"   Checking 4Everland credentials...")
+        bucket = os.getenv("EVERLAND_BUCKET_NAME")
+        access_key = os.getenv("EVERLAND_ACCESS_KEY")
+        has_secret = bool(os.getenv("EVERLAND_SECRET_KEY"))
+        print(f"   Bucket: {bucket}, Access Key: {access_key[:8]}..., Secret Key: {'✓' if has_secret else '✗'}")
+        
+        print(f"   Calling upload_to_ipfs()...")
+        ipfs_url = upload_to_ipfs(file_bytes, filename)
+        
+        if not ipfs_url:
+            print(f"❌ IPFS upload returned None for {filename}")
+            raise HTTPException(status_code=500, detail="Failed to upload to IPFS - upload_to_ipfs() returned None")
+        
+        print(f"✅ IPFS upload successful: {ipfs_url}")
+        print(f"===================================\n")
         return {"success": True, "url": ipfs_url}
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ IPFS upload exception: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"IPFS upload failed: {str(e)}")
 
 
@@ -1165,9 +1296,16 @@ async def submit_proof(request: SubmitProofRequest):
             print(f"✅ Work approved for job #{request.job_id}, releasing funds...")
             release_result = await mcp.release_funds_on_chain(job_id=request.job_id)
             
+            print(f"📤 Release result: {release_result}")
+            
             if release_result["success"]:
                 # Update DB to PAYMENT_PENDING (not COMPLETED yet)
                 tx_hash = release_result["tx_hash"]
+                print(f"💰 Payment TX broadcasted: {tx_hash}")
+                print(f"   Worker will receive: {release_result.get('worker_paid_gas', 'N/A')} GAS")
+                print(f"   Fee collected: {release_result.get('fee_collected_gas', 'N/A')} GAS")
+                print(f"   🔗 View TX: https://dora.coz.io/transaction/neo3/testnet/{tx_hash}")
+                
                 job = db.set_payment_pending(
                     job_id=request.job_id,
                     verification_result=verification,
@@ -1212,11 +1350,61 @@ async def submit_proof(request: SubmitProofRequest):
             else:
                 raise HTTPException(status_code=500, detail="Work approved but payment release failed. Please contact support.")
         else:
-            # Rejected - Mark as disputed or allow retry
+            # Rejected - Mark as disputed and create dispute record
             print(f"❌ Work rejected for job #{request.job_id}")
+            
+            # Extract AI-generated rejection reason
+            ai_reason = verification.get("reason", "Work did not meet requirements")
+            
+            # Build detailed dispute reason from verification breakdown
+            dispute_reason_parts = [ai_reason]
+            
+            # Add specific issues if available
+            if verification.get("issues"):
+                issues = verification["issues"]
+                if isinstance(issues, list) and len(issues) > 0:
+                    dispute_reason_parts.append("\n\nSpecific issues:")
+                    for issue in issues[:3]:  # Limit to top 3 issues
+                        dispute_reason_parts.append(f"• {issue}")
+            
+            # Add breakdown summary if available
+            breakdown = verification.get("breakdown", {})
+            if breakdown:
+                failed_checks = []
+                
+                # Check each component score (lower scores indicate failures)
+                # GPS Quality: max 25 points, failing if < 10
+                if breakdown.get("gps_quality", 25) < 10:
+                    failed_checks.append("GPS quality failed")
+                
+                # Visual Location: max 20 points, failing if < 8
+                if breakdown.get("visual_location", 20) < 8:
+                    failed_checks.append("Location verification failed")
+                
+                # Transformation: max 25 points, failing if < 15
+                if breakdown.get("transformation", 25) < 15:
+                    failed_checks.append("No visible work transformation")
+                
+                # Coverage: max 15 points, failing if < 7
+                if breakdown.get("coverage", 15) < 7:
+                    failed_checks.append("Incomplete coverage of work area")
+                
+                # Requirements: max 15 points, failing if < 7
+                if breakdown.get("requirements", 15) < 7:
+                    failed_checks.append("Requirements not met")
+                
+                if failed_checks:
+                    dispute_reason_parts.append("\n\nFailed checks:")
+                    for check in failed_checks:
+                        dispute_reason_parts.append(f"• {check}")
+            
+            dispute_reason = "\n".join(dispute_reason_parts)
+            
             job = db.dispute_job(
                 job_id=request.job_id,
-                reason=verification.get("reason", "Work did not meet requirements")
+                reason=dispute_reason,
+                ai_verdict=verification,
+                raised_by="system"  # AI-triggered dispute
             )
             
             # Broadcast dispute to worker and client
@@ -1224,7 +1412,7 @@ async def submit_proof(request: SubmitProofRequest):
                 "type": "DISPUTE_RAISED",
                 "job_id": request.job_id,
                 "status": "DISPUTED",
-                "message": "❌ Work rejected: " + verification.get("reason", "Did not meet requirements"),
+                "message": f"❌ Work rejected: {ai_reason}",
                 "verification": verification
             }
             if job.get("worker_address"):

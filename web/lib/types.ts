@@ -1,3 +1,12 @@
+export interface VerificationPlan {
+    task_category: string;
+    success_criteria: string[];
+    rejection_criteria: string[];
+    visual_checks: string[];
+    location_required: boolean;
+    comparison_mode: 'before_after' | 'reference_match' | 'checklist';
+}
+
 export interface JobDict {
     job_id: number;
     client_address: string;
@@ -19,8 +28,22 @@ export interface JobDict {
     verification_summary?: {
         verified: boolean;
         verdict: string;
+        score?: number;
+        comparison?: {
+            same_location: boolean;
+            same_object: boolean;
+            transformation_occurred: boolean;
+            location_confidence: number;
+            visual_changes?: string[];
+        };
+        gps_verification?: {
+            location_match: boolean;
+            distance_meters?: number;
+            confidence: number;
+            reasoning: string;
+        };
     } | null;
-    verification_plan?: Record<string, any>;
+    verification_plan?: VerificationPlan | null;
 }
 
 export interface WorkerStats {

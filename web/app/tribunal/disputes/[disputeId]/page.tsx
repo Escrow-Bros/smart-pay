@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 export default function DisputeDetailPage() {
     const params = useParams();
@@ -68,8 +69,12 @@ export default function DisputeDetailPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert(`Dispute resolved successfully!\nTransaction: ${data.transaction.tx_hash}`);
-                router.push('/tribunal');
+                toast.success(`🎉 Dispute resolved successfully! TX: ${data.transaction.tx_hash.slice(0, 10)}...`, {
+                    duration: 5000,
+                    position: 'top-center',
+                });
+                // Brief delay to let user see the success toast
+                setTimeout(() => router.push('/tribunal'), 1500);
             } else {
                 setError(data.error || 'Failed to resolve dispute');
             }

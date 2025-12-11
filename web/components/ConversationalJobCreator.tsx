@@ -9,6 +9,7 @@ import LocationPicker from '@/components/LocationPicker';
 import { apiClient } from '@/lib/api';
 import { usdToGas, formatGasWithUSD } from '@/lib/currency';
 import type { UploadedImage } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 interface Message {
   id: string;
@@ -27,7 +28,7 @@ interface ExtractedData {
 }
 
 export default function ConversationalJobCreator() {
-  const { state, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages } = useApp();
+  const { state, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages, fetchData } = useApp();
 
   // Prevent hydration errors by only rendering after mount
   const [mounted, setMounted] = useState(false);
@@ -236,7 +237,7 @@ export default function ConversationalJobCreator() {
 
   const handleCreateJob = async () => {
     if (!isComplete || !state.walletAddress) {
-      alert('Please complete all fields and connect your wallet');
+      toast.error('Please complete all fields and connect your wallet');
       return;
     }
 
@@ -258,20 +259,29 @@ export default function ConversationalJobCreator() {
         console.log(`[JobCreator] Image ${idx + 1}:`, img.file.name, 'Size:', (img.file.size / (1024 * 1024)).toFixed(2), 'MB');
       });
 
-      const ipfsUrls = await Promise.all(
-        state.clientUploadedImages.map(async (img, idx) => {
-          console.log(`[JobCreator] Uploading image ${idx + 1}/${state.clientUploadedImages.length} to IPFS:`, img.file.name);
-          try {
-            const url = await apiClient.uploadToIpfs(img.file);
-            console.log(`[JobCreator] ✅ Image ${idx + 1} uploaded successfully:`, url);
-            return url;
-          } catch (error) {
-            console.error(`[JobCreator] ❌ Failed to upload image ${idx + 1}:`, error);
-            throw error;
-          }
-        })
-      );
+      const ipfsUrls: string[] = [];
+      
+      for (let idx = 0; idx < state.clientUploadedImages.length; idx++) {
+        const img = state.clientUploadedImages[idx];
+        console.log(`[JobCreator] Uploading image ${idx + 1}/${state.clientUploadedImages.length} to IPFS:`, img.file.name);
+        
+        try {
+          const url = await apiClient.uploadToIpfs(img.file);
+          console.log(`[JobCreator] ✅ Image ${idx + 1} uploaded successfully:`, url);
+          ipfsUrls.push(url);
+        } catch (error) {
+          console.error(`[JobCreator] ❌ Failed to upload image ${idx + 1}:`, error);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          toast.error(`Failed to upload ${img.file.name}: ${errorMsg}`);
+          throw new Error(`Image upload failed: ${errorMsg}`);
+        }
+      }
+      
       console.log('[JobCreator] All IPFS uploads complete:', ipfsUrls);
+      
+      if (ipfsUrls.length === 0) {
+        throw new Error('No images were uploaded successfully');
+      }
 
       // Create job
       const payload = {
@@ -284,8 +294,23 @@ export default function ConversationalJobCreator() {
         amount: paymentAmount, // Always in GAS
         verification_plan: {
           task_category: extractedData.task || 'general',
-          verification_checklist: [],
-          quality_indicators: []
+          success_criteria: [
+            'Work completed as described',
+            'Quality meets standards',
+            'All requirements fulfilled'
+          ],
+          rejection_criteria: [
+            'Incomplete work',
+            'Poor quality',
+            'Does not match description'
+          ],
+          visual_checks: [
+            'Overall completeness',
+            'Quality of execution',
+            'Attention to detail'
+          ],
+          location_required: !!extractedData.location,
+          comparison_mode: 'before_after'
         },
       };
 
@@ -298,7 +323,13 @@ export default function ConversationalJobCreator() {
           ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)`
           : `${paymentAmount.toFixed(2)} GAS`;
 
-        alert(`Job created successfully! ID: ${result.job.job_id}\nPayment: ${displayAmount}`);
+        toast.success(`🎉 Job #${result.job.job_id} created successfully! Payment: ${displayAmount}`, {
+          duration: 5000,
+          position: 'top-center',
+        });
+
+        // Auto-refresh client jobs data
+        await fetchData();
 
         // Clear session
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`, {
@@ -331,7 +362,12 @@ export default function ConversationalJobCreator() {
       }
     } catch (error) {
       console.error('Create error:', error);
-      alert('Failed to create job');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Don't show generic error if we already showed specific upload error
+      if (!errorMsg.includes('Image upload failed')) {
+        toast.error(`❌ Failed to create job: ${errorMsg}`);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -353,7 +389,8 @@ export default function ConversationalJobCreator() {
         {/* Chat Messages */}
         <div
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4"
+          className="overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4"
+          style={{ maxHeight: '60vh', minHeight: '300px' }}
         >
           {isRestoring ? (
             <div className="flex items-center justify-center h-full">

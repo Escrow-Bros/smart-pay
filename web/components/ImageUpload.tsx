@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { UploadedImage } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 interface ImageUploadProps {
     images: UploadedImage[];
@@ -16,7 +17,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
         Array.from(files).forEach((file) => {
             // Check file type
             if (!file.type.startsWith('image/')) {
-                alert(`"${file.name}" is not an image file.`);
+                toast.error(`"${file.name}" is not an image file.`);
                 return;
             }
 
@@ -46,7 +47,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     if (!ctx) {
-                        alert(`Failed to process "${file.name}". Please try again.`);
+                        toast.error(`Failed to process "${file.name}". Please try again.`);
                         return;
                     }
                     ctx.drawImage(img, 0, 0, width, height);
@@ -78,11 +79,11 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                                     }).catch(() => {
                                         // Both methods failed
                                         console.error(`Failed to process "${file.name}" - blob conversion failed.`);
-                                        alert(`Failed to process "${file.name}". The image may be too large or in an unsupported format.`);
+                                        toast.error(`Failed to process "${file.name}". The image may be too large or in an unsupported format.`);
                                     });
                                 } catch (error) {
                                     console.error(`Error processing "${file.name}":`, error);
-                                    alert(`Failed to process "${file.name}". Please try again.`);
+                                    toast.error(`Failed to process "${file.name}". Please try again.`);
                                 }
                                 return; // Terminate processing
                             }
@@ -114,7 +115,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     console.error(`Failed to load image: "${file.name}". The file may be corrupted or in an unsupported format.`);
                     
                     // Surface error to user
-                    alert(`Failed to load "${file.name}". The image may be corrupted or in an unsupported format.`);
+                    toast.error(`Failed to load "${file.name}". The image may be corrupted or in an unsupported format.`);
                     
                     // Clean up: img element will be garbage collected
                     // File is not added to the upload list, preventing silent failures
@@ -123,7 +124,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
             };
             reader.onerror = () => {
                 console.error(`Failed to read file: "${file.name}".`);
-                alert(`Failed to read "${file.name}". Please try again.`);
+                toast.error(`Failed to read "${file.name}". Please try again.`);
             };
             reader.readAsDataURL(file);
         });
