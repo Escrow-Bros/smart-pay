@@ -573,7 +573,9 @@ export default function WorkerCurrentJobPage() {
                                                                             toast.success(data.action_taken || 'Payment verified!');
                                                                             await fetchData();
                                                                         } else {
-                                                                            toast.info(data.action_taken || 'Payment still processing');
+                                                                            toast(data.action_taken || 'Payment still processing', {
+                                                                                icon: 'ℹ️',
+                                                                            });
                                                                         }
                                                                     } catch (error) {
                                                                         toast.error('Failed to verify payment status');
