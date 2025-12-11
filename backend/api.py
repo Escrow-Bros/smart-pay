@@ -890,7 +890,7 @@ async def verify_payment_status(job_id: int):
         print(f"❌ Error verifying payment for job #{job_id}: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to verify payment: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to verify payment: {e!s}") from e
 
 
 @app.get("/api/jobs/{job_id}/status")
@@ -1060,9 +1060,9 @@ async def upload_to_ipfs_endpoint(file: UploadFile = File(...)):
         if len(file_bytes) == 0:
             raise HTTPException(status_code=400, detail="File is empty")
             
-        # Generate a unique filename
+        # Generate a unique filename with timestamp to reduce collision probability
         extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-        filename = f"upload_{os.urandom(4).hex()}.{extension}"
+        filename = f"upload_{int(time.time())}_{os.urandom(4).hex()}.{extension}"
         print(f"   Generated filename: {filename}")
         
         # Check credentials
