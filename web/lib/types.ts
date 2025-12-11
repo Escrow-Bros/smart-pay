@@ -28,6 +28,20 @@ export interface JobDict {
     verification_summary?: {
         verified: boolean;
         verdict: string;
+        score?: number;
+        comparison?: {
+            same_location: boolean;
+            same_object: boolean;
+            transformation_occurred: boolean;
+            location_confidence: number;
+            visual_changes?: string[];
+        };
+        gps_verification?: {
+            location_match: boolean;
+            distance_meters?: number;
+            confidence: number;
+            reasoning: string;
+        };
     } | null;
     verification_plan?: VerificationPlan;
 }
