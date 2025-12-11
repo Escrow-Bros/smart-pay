@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
 import { useState, useEffect } from 'react';
-import { Search, Zap, Wallet, Gem, Menu, X, ArrowLeftRight } from 'lucide-react';
+import { Search, Zap, Wallet, Gem, Menu, X, ArrowLeftRight, Clock } from 'lucide-react';
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -27,6 +27,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
     const navItems = [
         { href: '/worker/jobs', label: 'Available Jobs', icon: Search },
         { href: '/worker/current', label: 'Current Jobs', icon: Zap },
+        { href: '/worker/history', label: 'History', icon: Clock },
         { href: '/worker/wallet', label: 'Wallet', icon: Wallet },
     ];
 

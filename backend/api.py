@@ -528,10 +528,13 @@ async def root():
         "endpoints": {
             "GET /api/health": "Detailed health check",
             "GET /api/wallet/balance/{address}": "Get wallet balance",
-            "GET /api/jobs/available": "List available jobs",
-            "GET /api/jobs/client/{address}": "Get client's jobs",
-            "GET /api/jobs/worker/{address}": "Get worker's jobs",
-            "GET /api/jobs/{job_id}": "Get job details",
+            "GET /api/jobs/available": "List available jobs (OPEN status)",
+            "GET /api/jobs/client/{address}": "Get all client's jobs (all statuses)",
+            "GET /api/jobs/worker/{address}/all": "Get all worker's jobs (all statuses)",
+            "GET /api/jobs/worker/{address}/current": "Get worker's active jobs (LOCKED, PAYMENT_PENDING, DISPUTED)",
+            "GET /api/jobs/worker/{address}/history": "Get worker's completed jobs",
+            "GET /api/jobs/worker/{address}/stats": "Get worker statistics",
+            "GET /api/jobs/{job_id}": "Get job details by ID",
             "POST /api/jobs/analyze": "Analyze job with AI (Paralegal)",
             "POST /api/jobs/create": "Create new job",
             "POST /api/jobs/assign": "Assign job to worker",
@@ -739,6 +742,23 @@ async def get_worker_history(worker_address: str):
         raise
     except Exception as e:
         print(f"❌ Error getting worker history: {str(e)}")
+        return {"jobs": []}  # Return empty on error
+
+
+@app.get("/api/jobs/worker/{worker_address}/all")
+async def get_all_worker_jobs(worker_address: str):
+    """Get all jobs for a worker (active + completed + all statuses)"""
+    try:
+        # Validate address
+        if not worker_address or not worker_address.startswith('N') or len(worker_address) != 34:
+            return {"jobs": []}  # Return empty instead of error
+        
+        jobs = db.get_all_worker_jobs(worker_address)
+        return {"jobs": jobs}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting all worker jobs: {str(e)}")
         return {"jobs": []}  # Return empty on error
 
 
@@ -1154,6 +1174,20 @@ async def submit_proof(request: SubmitProofRequest):
                     tx_hash=tx_hash
                 )
                 
+                # Broadcast verification success to worker and client
+                verification_message = {
+                    "type": "JOB_STATUS_UPDATE",
+                    "job_id": request.job_id,
+                    "status": "PAYMENT_PENDING",
+                    "message": "✅ Work approved! Payment transaction broadcast.",
+                    "tx_hash": tx_hash,
+                    "verification": verification
+                }
+                if job.get("worker_address"):
+                    await websocket_manager.broadcast_to_client(job["worker_address"], verification_message)
+                if job.get("client_address"):
+                    await websocket_manager.broadcast_to_client(job["client_address"], verification_message)
+                
                 # Start background task to monitor confirmation
                 # Store reference to prevent silent exception loss
                 task = asyncio.create_task(
@@ -1184,6 +1218,19 @@ async def submit_proof(request: SubmitProofRequest):
                 job_id=request.job_id,
                 reason=verification.get("reason", "Work did not meet requirements")
             )
+            
+            # Broadcast dispute to worker and client
+            dispute_message = {
+                "type": "DISPUTE_RAISED",
+                "job_id": request.job_id,
+                "status": "DISPUTED",
+                "message": "❌ Work rejected: " + verification.get("reason", "Did not meet requirements"),
+                "verification": verification
+            }
+            if job.get("worker_address"):
+                await websocket_manager.broadcast_to_client(job["worker_address"], dispute_message)
+            if job.get("client_address"):
+                await websocket_manager.broadcast_to_client(job["client_address"], dispute_message)
             
             return {
                 "success": False,

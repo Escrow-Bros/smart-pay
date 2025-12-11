@@ -135,11 +135,14 @@ export default function WorkerCurrentJobPage() {
             const result = await apiClient.submitProof(activeJob.job_id, ipfsUrls, workerLocation);
 
             if (result.success) {
-                alert('Work submitted successfully! Waiting for verification.');
+                alert('✅ Work approved! Payment transaction sent to blockchain. You\'ll be notified when it confirms.');
                 setProofImages([]);
-                await fetchData();
+                setSelectedJob(null);  // Clear selection to show updated job
+                await fetchData();  // Refresh to show PAYMENT_PENDING status
             } else {
-                alert('Failed to submit proof: ' + (result.message || 'Unknown error'));
+                alert('❌ Work rejected: ' + (result.message || result.verification?.reason || 'Did not meet requirements'));
+                // Still refresh to show dispute status
+                await fetchData();
             }
         } catch (error) {
             console.error('Submission error:', error);
@@ -297,29 +300,58 @@ export default function WorkerCurrentJobPage() {
                             )}
                         </div>
 
-                        <div className="border-t border-slate-700 pt-6">
-                            <h3 className="text-white font-semibold mb-3">Submit Proof of Completion</h3>
-                            <p className="text-slate-400 text-sm mb-4">
-                                Upload photos showing the completed work to receive payment.
-                            </p>
+                        {/* Show verification status if work was submitted */}
+                        {activeJob.verification_summary && (
+                            <div className={`border-t border-slate-700 pt-6 mb-6 ${activeJob.verification_summary.verified ? 'bg-green-900/20' : 'bg-red-900/20'} p-6 rounded-xl`}>
+                                <div className="flex items-start gap-3">
+                                    {activeJob.verification_summary.verified ? (
+                                        <svg className="w-6 h-6 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    )}
+                                    <div>
+                                        <h3 className={`font-semibold mb-1 ${activeJob.verification_summary.verified ? 'text-green-400' : 'text-red-400'}`}>
+                                            {activeJob.verification_summary.verified ? '✅ Work Approved' : '❌ Work Rejected'}
+                                        </h3>
+                                        <p className="text-slate-300 text-sm">{activeJob.verification_summary.verdict}</p>
+                                        {activeJob.status === 'PAYMENT_PENDING' && (
+                                            <p className="text-yellow-400 text-xs mt-2">⏳ Payment transaction is being confirmed on blockchain...</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-                            <ImageUpload
-                                images={proofImages}
-                                onAdd={handleAddImage}
-                                onRemove={handleRemoveImage}
-                            />
+                        {/* Only show submission form if job is LOCKED (not submitted yet) */}
+                        {activeJob.status === 'LOCKED' && (
+                            <div className="border-t border-slate-700 pt-6">
+                                <h3 className="text-white font-semibold mb-3">Submit Proof of Completion</h3>
+                                <p className="text-slate-400 text-sm mb-4">
+                                    Upload photos showing the completed work to receive payment.
+                                </p>
 
-                            <button
-                                onClick={handleSubmit}
-                                disabled={isSubmitting || proofImages.length === 0}
-                                className={`w-full mt-4 font-semibold py-3 rounded-xl transition-all active:scale-95 ${isSubmitting || proofImages.length === 0
-                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                    : 'bg-green-600 hover:bg-green-500 text-white'
-                                    }`}
-                            >
-                                {isSubmitting ? 'Submitting...' : 'Submit for Verification'}
-                            </button>
-                        </div>
+                                <ImageUpload
+                                    images={proofImages}
+                                    onAdd={handleAddImage}
+                                    onRemove={handleRemoveImage}
+                                />
+
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={isSubmitting || proofImages.length === 0}
+                                    className={`w-full mt-4 font-semibold py-3 rounded-xl transition-all active:scale-95 ${isSubmitting || proofImages.length === 0
+                                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                        : 'bg-green-600 hover:bg-green-500 text-white'
+                                        }`}
+                                >
+                                    {isSubmitting ? 'Submitting...' : 'Submit for Verification'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

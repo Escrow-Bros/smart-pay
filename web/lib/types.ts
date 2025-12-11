@@ -12,6 +12,8 @@ export interface JobDict {
     status: string;
     created_at: string;
     updated_at: string;
+    assigned_at?: string | null;
+    completed_at?: string | null;
     tx_hash?: string | null;
     verification_result?: Record<string, unknown> | null;
     verification_summary?: {
