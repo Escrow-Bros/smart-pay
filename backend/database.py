@@ -17,26 +17,9 @@ class Database:
         if not self.connection_string:
             raise ValueError("DATABASE_URL environment variable not set")
         
-        # Use Supabase Pooler for better compatibility with serverless/IPv6 environments
-        # Replace direct connection with pooler connection
-        connection_params = self.connection_string
-        
-        # If using direct db.xxx.supabase.co, switch to pooler
-        if 'db.eztwselolejaenphcevb.supabase.co:5432' in connection_params:
-            # Use Transaction pooler (port 6543) instead of direct connection (5432)
-            connection_params = connection_params.replace(
-                'db.eztwselolejaenphcevb.supabase.co:5432',
-                'aws-0-us-east-1.pooler.supabase.com:6543'
-            )
-            # Also need to update the user format for pooler
-            connection_params = connection_params.replace(
-                'postgresql://postgres:',
-                'postgresql://postgres.eztwselolejaenphcevb:'
-            )
-            print("🔗 Using Supabase Transaction Pooler for connection")
-        
         # Create connection pool (min 1, max 10 connections)
-        self.pool = SimpleConnectionPool(1, 10, connection_params)
+        # psycopg2 will handle connection to Supabase
+        self.pool = SimpleConnectionPool(1, 10, self.connection_string)
         self._init_db()
     
     @contextmanager

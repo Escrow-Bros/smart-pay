@@ -1279,12 +1279,12 @@ async def submit_proof(request: SubmitProofRequest):
     Workers can resubmit for DISPUTED jobs to attempt reverification.
     """
     try:
-        # Check job exists and is LOCKED or DISPUTED
+        # Check job exists and is IN_PROGRESS or DISPUTED
         job = db.get_job(request.job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         
-        if job["status"] not in ["LOCKED", "DISPUTED"]:
+        if job["status"] not in ["IN_PROGRESS", "DISPUTED"]:
             raise HTTPException(status_code=400, detail=f"Job is {job['status']}, cannot submit proof")
         
         # Rate limiting (by worker address)

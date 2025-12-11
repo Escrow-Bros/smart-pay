@@ -162,14 +162,14 @@ export default function WorkerCurrentJobPage() {
             {
                 id: 'work_submitted',
                 label: 'Work Submitted',
-                status: job.proof_photos && job.proof_photos.length > 0 ? 'completed' : job.status === 'LOCKED' ? 'pending' : 'current',
+                status: job.proof_photos && job.proof_photos.length > 0 ? 'completed' : job.status === 'IN_PROGRESS' ? 'pending' : 'current',
                 icon: '📸',
                 description: 'Proof photos uploaded'
             },
             {
                 id: 'verification',
                 label: 'AI Verification',
-                status: job.verification_summary ? 'completed' : job.status === 'LOCKED' ? 'pending' : 'current',
+                status: job.verification_summary ? 'completed' : job.status === 'IN_PROGRESS' ? 'pending' : 'current',
                 icon: job.verification_summary?.verified ? '✓' : '🔍',
                 description: job.verification_summary ? (job.verification_summary.verified ? 'Work approved' : 'Work rejected') : 'Analyzing your work'
             },
@@ -485,7 +485,7 @@ export default function WorkerCurrentJobPage() {
                         </div>
 
                         {/* Job Lifecycle Timeline - Show if work has been submitted */}
-                        {(activeJob.status !== 'LOCKED' || (activeJob.proof_photos && activeJob.proof_photos.length > 0)) && (
+                        {(activeJob.status !== 'IN_PROGRESS' || (activeJob.proof_photos && activeJob.proof_photos.length > 0)) && (
                             <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-800 mb-6">
                                 <h3 className="text-white font-semibold mb-6 flex items-center">
                                     <svg className="w-5 h-5 mr-2 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -621,8 +621,8 @@ export default function WorkerCurrentJobPage() {
                             </div>
                         )}
 
-                        {/* Only show submission form if job is LOCKED (not submitted yet) */}
-                        {activeJob.status === 'LOCKED' && (
+                        {/* Only show submission form if job is IN_PROGRESS (not submitted yet) */}
+                        {activeJob.status === 'IN_PROGRESS' && (
                             <div className="border-t border-slate-700 pt-6">
                                 <h3 className="text-white font-semibold mb-3">Submit Proof of Completion</h3>
                                 <p className="text-slate-400 text-sm mb-4">
