@@ -65,6 +65,12 @@ class Database:
             except sqlite3.OperationalError:
                 pass
             
+            # Migration: Add verification_summary column if it doesn't exist
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN verification_summary TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
             # Migration: Add location columns if they don't exist
             try:
                 conn.execute("ALTER TABLE jobs ADD COLUMN location TEXT")
@@ -195,15 +201,25 @@ class Database:
             return [self._row_to_dict(row) for row in cursor.fetchall()]
     
     def get_worker_active_jobs(self, worker_address: str) -> List[Dict]:
-        """Get worker's currently active jobs (LOCKED or DISPUTED status)"""
+        """Get worker's currently active jobs (LOCKED, PAYMENT_PENDING, or DISPUTED status)"""
         with self.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT * FROM jobs 
-                WHERE worker_address = ? AND status IN ('LOCKED', 'DISPUTED')
+                WHERE worker_address = ? AND status IN ('LOCKED', 'PAYMENT_PENDING', 'DISPUTED')
                 ORDER BY assigned_at DESC
             """, (worker_address,))
             rows = cursor.fetchall()
             return [self._row_to_dict(row) for row in rows]
+    
+    def get_all_worker_jobs(self, worker_address: str) -> List[Dict]:
+        """Get all jobs assigned to a worker (any status except null worker)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM jobs 
+                WHERE worker_address = ?
+                ORDER BY assigned_at DESC
+            """, (worker_address,))
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
     
     def get_jobs_by_status(self, status: str) -> List[Dict]:
         """Get all jobs with a specific status (for recovery/monitoring)"""
@@ -252,14 +268,28 @@ class Database:
         tx_hash: str
     ) -> Dict:
         """Mark job as payment pending (transaction broadcast but not confirmed)"""
+        # Use helper to build verification_summary with proper logging
+        if not isinstance(verification_result, dict):
+            print(f"⚠️  WARNING: Job #{job_id} - verification_result is not a dict, defaulting to unverified")
+            verification_result = {}
+        
+        # Log warnings if expected keys are missing
+        if verification_result.get("verified") is None:
+            print(f"⚠️  WARNING: Job #{job_id} - 'verified' key missing from verification_result, defaulting to False")
+        if not verification_result.get("verdict"):
+            print(f"⚠️  WARNING: Job #{job_id} - 'verdict' key missing from verification_result, using fallback message")
+        
+        verification_summary = self._build_verification_summary(verification_result)
+        
         with self.get_connection() as conn:
             conn.execute("""
                 UPDATE jobs 
                 SET status = 'PAYMENT_PENDING',
                     verification_result = ?,
+                    verification_summary = ?,
                     tx_hash = ?
                 WHERE job_id = ?
-            """, (json.dumps(verification_result), tx_hash, job_id))
+            """, (json.dumps(verification_result), json.dumps(verification_summary), tx_hash, job_id))
         
         return self.get_job(job_id)
     
@@ -295,15 +325,42 @@ class Database:
     
     def dispute_job(self, job_id: int, reason: str) -> Dict:
         """Mark job as disputed"""
+        verification_result = {"disputed": True, "reason": reason, "verified": False}
+        verification_summary = self._build_verification_summary(verification_result, reason)
+        
         with self.get_connection() as conn:
             conn.execute("""
                 UPDATE jobs 
                 SET status = 'DISPUTED',
-                    verification_result = ?
+                    verification_result = ?,
+                    verification_summary = ?
                 WHERE job_id = ?
-            """, (json.dumps({"disputed": True, "reason": reason}), job_id))
+            """, (json.dumps(verification_result), json.dumps(verification_summary), job_id))
         
         return self.get_job(job_id)
+    
+    def _build_verification_summary(self, verification_result: Optional[Dict], fallback_reason: Optional[str] = None) -> Dict:
+        """
+        Helper to build verification_summary safely from verification_result.
+        Ensures consistent handling across set_payment_pending, dispute_job, and create_dispute.
+        """
+        # Defensive: Handle None or non-dict verification_result
+        if not isinstance(verification_result, dict):
+            print(f"⚠️  WARNING: verification_result is not a dict, defaulting to unverified")
+            verification_result = {}
+        
+        # Extract verification summary with safe defaults (unverified by default)
+        verified = verification_result.get("verified")
+        verdict = verification_result.get("verdict") or verification_result.get("reason")
+        
+        # Use fallback_reason if verdict is missing
+        if not verdict and fallback_reason:
+            verdict = fallback_reason
+        
+        return {
+            "verified": verified if verified is not None else False,
+            "verdict": verdict if verdict else "Verification result unavailable"
+        }
     
     # ==================== DISPUTES ====================
     
@@ -334,12 +391,16 @@ class Database:
             dispute_id = cursor.lastrowid
             
             # Also update job status to DISPUTED if not already
+            verification_result = {"disputed": True, "reason": reason, "verified": False}
+            verification_summary = self._build_verification_summary(verification_result, reason)
+            
             conn.execute("""
                 UPDATE jobs 
                 SET status = 'DISPUTED',
-                    verification_result = ?
+                    verification_result = ?,
+                    verification_summary = ?
                 WHERE job_id = ? AND status != 'DISPUTED'
-            """, (json.dumps({"disputed": True, "reason": reason}), job_id))
+            """, (json.dumps(verification_result), json.dumps(verification_summary), job_id))
             
             # Commit happens automatically at end of with block
         
@@ -524,6 +585,8 @@ class Database:
             data["proof_photos"] = json.loads(data["proof_photos"])
         if data.get("verification_result"):
             data["verification_result"] = json.loads(data["verification_result"])
+        if data.get("verification_summary"):
+            data["verification_summary"] = json.loads(data["verification_summary"])
         if data.get("acceptance_criteria"):
             data["acceptance_criteria"] = json.loads(data["acceptance_criteria"])
         if data.get("verification_plan"):

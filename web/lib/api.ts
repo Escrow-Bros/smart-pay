@@ -35,6 +35,11 @@ export class ApiClient {
         return res.json() as Promise<{ jobs: JobDict[] }>;
     }
 
+    async getAllWorkerJobs(address: string) {
+        const res = await fetch(`${this.baseUrl}/api/jobs/worker/${address}/all`);
+        return res.json() as Promise<{ jobs: JobDict[] }>;
+    }
+
     async getWorkerStats(address: string) {
         const res = await fetch(`${this.baseUrl}/api/jobs/worker/${address}/stats`);
         return res.json() as Promise<WorkerStats>;
