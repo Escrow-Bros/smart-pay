@@ -28,7 +28,10 @@ interface ExtractedData {
 
 export default function ConversationalJobCreator() {
   const { state, setJobLocation, addUploadedImage, removeUploadedImage, clearUploadedImages } = useApp();
-  
+
+  // Prevent hydration errors by only rendering after mount
+  const [mounted, setMounted] = useState(false);
+
   // Get or create session ID from localStorage
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -45,13 +48,13 @@ export default function ConversationalJobCreator() {
     }
     return newId;
   });
-  
+
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: '1',
+      id: 'initial-1',
       role: 'assistant',
       content: 'Hi! 👋 I\'m here to help you create a job posting. What task do you need help with?',
-      timestamp: new Date()
+      timestamp: new Date(0) // Use epoch for SSR consistency
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,47 +69,52 @@ export default function ConversationalJobCreator() {
   });
   const [isComplete, setIsComplete] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Set mounted state after component mounts on client (prevents hydration errors)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Restore session from backend on mount
   useEffect(() => {
     const restoreSession = async () => {
       // Check if we have a stored session that might need restoration
       const hasStoredSession = typeof window !== 'undefined' && localStorage.getItem('job_creator_session_id');
-      
+
       if (!hasStoredSession) {
         console.log('[JobCreator] No stored session, skipping restoration');
         return;
       }
-      
+
       setIsRestoring(true);
-      
+
       try {
         console.log('[JobCreator] Attempting to restore session:', sessionId);
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`);
-        
+
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.session && data.session.history && data.session.history.length > 0) {
             console.log('[JobCreator] Session restored:', data.session);
-            
+
             // Restore messages from history
             const restoredMessages: Message[] = data.session.history.map((msg: any, idx: number) => ({
-              id: `restored_${idx}_${Date.now()}`,
+              id: `restored_${idx}`,
               role: msg.role,
               content: msg.content,
-              timestamp: new Date()
+              timestamp: new Date(msg.timestamp || 0)
             }));
             setMessages(restoredMessages);
             console.log('[JobCreator] Restored', restoredMessages.length, 'messages');
-            
+
             // Restore extracted data
             if (data.session.extracted_data) {
               setExtractedData(data.session.extracted_data);
             }
-            
+
             // Restore completion state
             if (data.session.is_complete !== undefined) {
               setIsComplete(data.session.is_complete);
@@ -123,7 +131,7 @@ export default function ConversationalJobCreator() {
         setIsRestoring(false);
       }
     };
-    
+
     restoreSession();
   }, [sessionId]);
 
@@ -135,9 +143,12 @@ export default function ConversationalJobCreator() {
   const handleSendMessage = async (userMessage: string, forceImageUploaded: boolean = false) => {
     if (isLoading) return;
 
-    // Add user message to chat with unique ID
+    // Use current message count for stable IDs on client
+    const msgCount = messages.length;
+
+    // Add user message to chat with stable ID
     const userMsg: Message = {
-      id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `user_${msgCount}`,
       role: 'user',
       content: userMessage,
       timestamp: new Date()
@@ -166,9 +177,9 @@ export default function ConversationalJobCreator() {
 
       const data = await response.json();
 
-      // Add AI response to chat with unique ID
+      // Add AI response to chat with stable ID
       const aiMsg: Message = {
-        id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `ai_${msgCount + 1}`,
         role: 'assistant',
         content: data.ai_message,
         timestamp: new Date()
@@ -179,7 +190,7 @@ export default function ConversationalJobCreator() {
       if (data.session_state) {
         setExtractedData(data.session_state.extracted_data);
         setIsComplete(data.session_state.is_complete);
-        
+
         // Update location in global state if extracted
         if (data.session_state.extracted_data.location && !state.jobLocation) {
           setJobLocation(data.session_state.extracted_data.location, 0, 0);
@@ -189,7 +200,7 @@ export default function ConversationalJobCreator() {
     } catch (error) {
       console.error('Chat error:', error);
       const errorMsg: Message = {
-        id: `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `error_${msgCount + 1}`,
         role: 'assistant',
         content: 'Sorry, I had trouble processing that. Could you try again?',
         timestamp: new Date()
@@ -205,10 +216,10 @@ export default function ConversationalJobCreator() {
     console.log('[JobCreator] Current images count before add:', state.clientUploadedImages.length);
     addUploadedImage(image);
     console.log('[JobCreator] addUploadedImage called, new count should be:', state.clientUploadedImages.length + 1);
-    
+
     // Update extracted data immediately to reflect image upload
     setExtractedData(prev => ({ ...prev, has_image: true }));
-    
+
     // Send notification to backend (handleSendMessage will add the chat message)
     console.log('[JobCreator] Sending notification to backend about uploaded image');
     handleSendMessage('[User uploaded reference image]', true); // Pass true to indicate image was just uploaded
@@ -216,7 +227,7 @@ export default function ConversationalJobCreator() {
 
   const handleLocationChange = (address: string, lat: number, lng: number) => {
     setJobLocation(address, lat, lng);
-    
+
     // Only notify AI if valid coordinates (user selected from dropdown)
     if (lat !== 0 && lng !== 0) {
       handleSendMessage(`Location is ${address}`);
@@ -234,7 +245,7 @@ export default function ConversationalJobCreator() {
     try {
       // Convert USD to GAS if needed
       let paymentAmount = extractedData.price_amount || 5.0;
-      
+
       if (extractedData.price_currency?.toUpperCase() === 'USD') {
         // Convert USD to GAS
         paymentAmount = usdToGas(paymentAmount);
@@ -246,7 +257,7 @@ export default function ConversationalJobCreator() {
       state.clientUploadedImages.forEach((img, idx) => {
         console.log(`[JobCreator] Image ${idx + 1}:`, img.file.name, 'Size:', (img.file.size / (1024 * 1024)).toFixed(2), 'MB');
       });
-      
+
       const ipfsUrls = await Promise.all(
         state.clientUploadedImages.map(async (img, idx) => {
           console.log(`[JobCreator] Uploading image ${idx + 1}/${state.clientUploadedImages.length} to IPFS:`, img.file.name);
@@ -283,23 +294,23 @@ export default function ConversationalJobCreator() {
       if (result.job) {
         const originalAmount = extractedData.price_amount || paymentAmount;
         const currency = extractedData.price_currency?.toUpperCase() || 'GAS';
-        const displayAmount = currency === 'USD' 
-          ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)` 
+        const displayAmount = currency === 'USD'
+          ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)`
           : `${paymentAmount.toFixed(2)} GAS`;
-          
+
         alert(`Job created successfully! ID: ${result.job.job_id}\nPayment: ${displayAmount}`);
-        
+
         // Clear session
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/session/${sessionId}`, {
           method: 'DELETE'
         });
-        
+
         // Clear localStorage session
         if (typeof window !== 'undefined') {
           localStorage.removeItem('job_creator_session_id');
           console.log('[JobCreator] Session cleared from localStorage');
         }
-        
+
         // Reset
         clearUploadedImages();
         setMessages([{
@@ -340,7 +351,7 @@ export default function ConversationalJobCreator() {
 
       <div className="flex-1 bg-slate-950/50 rounded-2xl sm:rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
         {/* Chat Messages */}
-        <div 
+        <div
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4"
         >
@@ -365,7 +376,7 @@ export default function ConversationalJobCreator() {
                   timestamp={msg.timestamp}
                 />
               ))}
-              
+
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-slate-800 rounded-2xl px-4 py-3 border border-slate-700">
@@ -379,7 +390,7 @@ export default function ConversationalJobCreator() {
               )}
             </>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -403,9 +414,9 @@ export default function ConversationalJobCreator() {
               {extractedData.price_amount && (
                 <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-green-500/20 text-green-400 rounded-full text-xs border border-green-500/30 whitespace-nowrap">
                   ✓ Price: {extractedData.price_amount} {extractedData.price_currency || 'GAS'}
-                  {extractedData.price_currency?.toUpperCase() === 'USD' && 
+                  {extractedData.price_currency?.toUpperCase() === 'USD' &&
                     ` (~${usdToGas(extractedData.price_amount).toFixed(2)} GAS)`}
-                  {extractedData.price_currency?.toUpperCase() === 'GAS' && 
+                  {extractedData.price_currency?.toUpperCase() === 'GAS' &&
                     ` (~${formatGasWithUSD(extractedData.price_amount).usd})`}
                 </span>
               )}
@@ -415,7 +426,7 @@ export default function ConversationalJobCreator() {
                 </span>
               )}
             </div>
-            
+
             {/* Manual completion trigger if AI hasn't detected it yet */}
             {!isComplete && extractedData.task && extractedData.location && extractedData.price_amount && state.clientUploadedImages.length > 0 && (
               <div className="mt-3">
@@ -439,7 +450,7 @@ export default function ConversationalJobCreator() {
                 onAdd={handleImageUpload}
                 onRemove={removeUploadedImage}
               />
-              
+
               <LocationPicker
                 value={state.jobLocation}
                 onChange={handleLocationChange}

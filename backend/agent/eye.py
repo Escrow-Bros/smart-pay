@@ -6,6 +6,7 @@ Uses modular AI client with GPT-4.1 (reasoning) and GPT-4o (vision)
 import asyncio
 import json
 import base64
+import httpx
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from backend.agent.gps_verifier import verify_gps_location
@@ -785,7 +786,6 @@ Return ONLY valid JSON:
         STRICT: Must fetch from chain to ensure Source of Truth.
         """
         from src.neo_mcp import NeoMCP
-        from backend.database import get_db
         
         print(f"\n📡 Fetching job #{job_id} from blockchain...")
         mcp = NeoMCP()
@@ -803,21 +803,13 @@ Return ONLY valid JSON:
         print(f"   Amount: {job_details.get('amount_gas')} GAS")
         print(f"   Details length: {len(job_details.get('details', ''))} chars")
         print(f"   Reference URLs: {len(job_details.get('reference_urls', []))} photos")
-
-        # Fetch location from database (blockchain doesn't store it)
-        db = get_db()
-        db_job = db.get_job(job_id)
-        location_data = None
+        print(f"   📍 Location: ({job_details.get('latitude')}, {job_details.get('longitude')})")
         
-        if db_job:
-            location_data = {
-                "latitude": db_job.get("latitude"),
-                "longitude": db_job.get("longitude"),
-                "location_name": db_job.get("location")
-            }
-            print(f"   📍 Location from DB: {location_data.get('location_name')} ({location_data.get('latitude')}, {location_data.get('longitude')})")
-        else:
-            print(f"   ⚠️  No location data found in database")
+        # Location data is now from blockchain
+        location_data = {
+            "latitude": job_details.get("latitude"),
+            "longitude": job_details.get("longitude")
+        }
 
         # Parse description and verification plan from details string
         full_details = job_details.get("details", "")
@@ -1000,18 +992,23 @@ Return ONLY valid JSON:
             "same_location": {
                 "verdict": True,
                 "confidence": 0.5,
+                "matching_features": [],
                 "reasoning": "Image verification unavailable - assuming same location"
             },
             "transformation_detected": {
+                "verdict": True,  # Required by make_final_decision
                 "matches_expected": True,
                 "confidence": 0.5,
                 "changes": ["Unable to verify actual changes - images not accessible"]
             },
             "coverage_consistency": {
                 "verdict": True,
+                "coverage_ratio": 0.5,
+                "angle_similarity": 0.5,
                 "confidence": 0.5,
                 "concerns": []
             },
+            "work_completed": True,  # Required by make_final_decision
             "gps_verification": None
         }
     

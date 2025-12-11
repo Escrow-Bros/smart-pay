@@ -121,19 +121,21 @@ class NeoMCP:
             job_id: Job identifier
         
         Returns:
-            Dict with all job information
+            Dict with all job information including location
         """
         facade = self._get_read_facade()
         
-        # Parallel reads for efficiency
+        # Parallel reads for efficiency - now including location
         status_result, client_result, worker_result, amount_result, \
-        details_result, urls_result = await asyncio.gather(
+        details_result, urls_result, lat_result, lng_result = await asyncio.gather(
             facade.test_invoke(self.contract.call_function("get_job_status", [job_id])),
             facade.test_invoke(self.contract.call_function("get_job_client", [job_id])),
             facade.test_invoke(self.contract.call_function("get_job_worker", [job_id])),
             facade.test_invoke(self.contract.call_function("get_job_required", [job_id])),
             facade.test_invoke(self.contract.call_function("get_job_details", [job_id])),
-            facade.test_invoke(self.contract.call_function("get_job_reference_urls", [job_id]))
+            facade.test_invoke(self.contract.call_function("get_job_reference_urls", [job_id])),
+            facade.test_invoke(self.contract.call_function("get_job_latitude", [job_id])),
+            facade.test_invoke(self.contract.call_function("get_job_longitude", [job_id]))
         )
         
         # Parse results
@@ -146,10 +148,16 @@ class NeoMCP:
         amount = amount_result.result.stack[0].value
         details = details_result.result.stack[0].value.decode('utf-8') if details_result.result.stack[0].value else ""
         urls = urls_result.result.stack[0].value.decode('utf-8') if urls_result.result.stack[0].value else ""
+        latitude_int = lat_result.result.stack[0].value
+        longitude_int = lng_result.result.stack[0].value
         
         # Convert addresses
         client_addr = wallet_utils.script_hash_to_address(client_hash)
         worker_addr = wallet_utils.script_hash_to_address(worker_hash)
+        
+        # Convert GPS coordinates back to float (divide by 1,000,000)
+        latitude = latitude_int / 1_000_000 if latitude_int else 0.0
+        longitude = longitude_int / 1_000_000 if longitude_int else 0.0
         
         return {
             "job_id": job_id,
@@ -160,7 +168,9 @@ class NeoMCP:
             "amount_locked": amount,
             "amount_gas": amount / 100_000_000,  # Convert to GAS
             "details": details,
-            "reference_urls": urls.split(",") if urls else []
+            "reference_urls": urls.split(",") if urls else [],
+            "latitude": latitude,
+            "longitude": longitude
         }
     
     async def get_contract_config(self) -> Dict[str, Any]:
@@ -199,7 +209,9 @@ class NeoMCP:
         client_address: str,
         description: str,
         reference_photos: List[str],
-        amount: float
+        amount: float,
+        latitude: float = 0.0,
+        longitude: float = 0.0
     ) -> Dict[str, Any]:
         """
         Create a new job and lock funds atomically (API-friendly).
@@ -209,6 +221,8 @@ class NeoMCP:
             description: Job description (used as details)
             reference_photos: List of IPFS URLs for reference images
             amount: Amount in GAS to lock (e.g., 10.0 for 10 GAS)
+            latitude: Job location latitude (e.g., 37.335708)
+            longitude: Job location longitude (e.g., -121.886665)
         
         Returns:
             Dict with transaction result and job_id
@@ -243,6 +257,10 @@ class NeoMCP:
         # Convert GAS to Fixed8 format (1 GAS = 100_000_000)
         amount_int = int(amount * 100_000_000)
         
+        # Convert GPS coordinates to integers (scale by 1,000,000)
+        latitude_int = int(latitude * 1_000_000)
+        longitude_int = int(longitude * 1_000_000)
+        
         # Format reference URLs
         urls_str = ",".join(reference_photos)
         
@@ -254,7 +272,7 @@ class NeoMCP:
             tx_hash = await facade.invoke_fast(
                 self.contract.call_function(
                     "create_job",
-                    [job_id, client_script_hash, amount_int, description, urls_str]
+                    [job_id, client_script_hash, amount_int, description, urls_str, latitude_int, longitude_int]
                 )
             )
             

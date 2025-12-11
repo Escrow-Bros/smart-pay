@@ -82,7 +82,7 @@ def onNEP17Payment(from_address: UInt160, amount: int, data: Any):
     pass
 
 @public
-def create_job(job_id: int, client: UInt160, amount: int, details: str, reference_urls: str) -> bool:
+def create_job(job_id: int, client: UInt160, amount: int, details: str, reference_urls: str, latitude: int, longitude: int) -> bool:
     """
     Atomically create a job and deposit funds.
     Client must sign transaction with appropriate witness scope.
@@ -92,6 +92,8 @@ def create_job(job_id: int, client: UInt160, amount: int, details: str, referenc
     :param amount: Amount of GAS to lock (in Fixed8 format: 1 GAS = 100_000_000)
     :param details: AI-generated acceptance criteria and job requirements
     :param reference_urls: Comma-separated IPFS URLs of reference images (e.g., "ipfs://abc,ipfs://def")
+    :param latitude: Job location latitude * 1000000 (e.g., 37.335708 -> 37335708)
+    :param longitude: Job location longitude * 1000000 (e.g., -121.886665 -> -121886665)
     :return: True if successful, False otherwise
     """
     # Validate inputs
@@ -116,6 +118,8 @@ def create_job(job_id: int, client: UInt160, amount: int, details: str, referenc
     put_int(_key(b"job_required", job_id), amount)
     put_str(_key(b"job_details", job_id), details)
     put_str(_key(b"job_reference_urls", job_id), reference_urls)
+    put_int(_key(b"job_latitude", job_id), latitude)
+    put_int(_key(b"job_longitude", job_id), longitude)
     put_int(_key(b"job_status", job_id), STATUS_OPEN)
     
     # Emit event
@@ -149,6 +153,16 @@ def get_job_reference_urls(job_id: int) -> str:
 def get_job_worker(job_id: int) -> UInt160:
     """Get the worker assigned to a job"""
     return get_uint160(_key(b"job_worker", job_id))
+
+@public
+def get_job_latitude(job_id: int) -> int:
+    """Get job location latitude (scaled by 1000000)"""
+    return get_int(_key(b"job_latitude", job_id))
+
+@public
+def get_job_longitude(job_id: int) -> int:
+    """Get job location longitude (scaled by 1000000)"""
+    return get_int(_key(b"job_longitude", job_id))
 
 @public
 def get_agent_addr() -> UInt160:
