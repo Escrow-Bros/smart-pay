@@ -98,4 +98,5 @@ uploaded_files/
 # Backend specific
 backend/*.db
 backend/__pycache__/
+backend/.sessions/
 

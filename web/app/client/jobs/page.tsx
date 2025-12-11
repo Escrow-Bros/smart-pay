@@ -88,8 +88,18 @@ export default function ClientJobsPage() {
                     })}
                 </div>
             ) : (
-                <div className="text-center py-8 bg-slate-900/30 border border-slate-800 rounded-xl">
-                    <p className="text-slate-400">No jobs yet. Create your first job!</p>
+                <div className="text-center py-12 bg-slate-900/30 border border-slate-800 rounded-xl">
+                    <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h3 className="text-lg font-semibold text-slate-300 mb-2">No Jobs Posted Yet</h3>
+                    <p className="text-slate-400 mb-4">You haven't created any job postings yet.</p>
+                    <a
+                        href="/client/create"
+                        className="inline-block bg-cyan-600 hover:bg-cyan-500 text-white font-semibold px-6 py-2.5 rounded-lg transition-all active:scale-95"
+                    >
+                        Create Your First Job
+                    </a>
                 </div>
             )}
         </div>

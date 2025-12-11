@@ -1,6 +1,9 @@
+'use client';
+
 import { cn } from '@/lib/utils';
 import { User, Bot } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { useState, useEffect } from 'react';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
@@ -10,9 +13,19 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
   const isUser = role === 'user';
-  const formattedTime = timestamp
-    ? timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '';
+  const [formattedTime, setFormattedTime] = useState('');
+
+  // Format time on client only to avoid hydration mismatch
+  useEffect(() => {
+    if (timestamp) {
+      const time = timestamp.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false // Use 24-hour format for consistency
+      });
+      setFormattedTime(time);
+    }
+  }, [timestamp]);
 
   return (
     <div className={cn(

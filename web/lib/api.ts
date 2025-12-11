@@ -133,7 +133,18 @@ export class ApiClient {
             method: 'POST',
             body: formData,
         });
+        
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ detail: 'Upload failed' }));
+            throw new Error(errorData.detail || `IPFS upload failed: ${res.status} ${res.statusText}`);
+        }
+        
         const data = await res.json();
+        
+        if (!data.success || !data.url) {
+            throw new Error('IPFS upload failed: Invalid response from server');
+        }
+        
         return data.url;
     }
 }

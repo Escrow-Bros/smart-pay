@@ -43,14 +43,8 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
         
         print(f"[IPFS] Initializing S3 client for 4Everland...")
         
-        # Transfer configuration to disable multipart uploads (forces Content-Length header)
-        transfer_config = TransferConfig(
-            multipart_threshold=100 * 1024 * 1024,  # Only use multipart for files > 100MB
-            use_threads=False
-        )
-        
-        # Initialize S3 resource (better for put operations)
-        s3_resource = boto3.resource(
+        # Use client interface (not resource) for better control over headers
+        s3_client = boto3.client(
             's3',
             endpoint_url=endpoint,
             aws_access_key_id=access_key,
@@ -70,10 +64,15 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
             try:
                 print(f"[IPFS] Upload attempt {attempt + 1}/{max_retries} - Uploading {file_size} bytes to {bucket_name}/{filename}")
                 
-                # Use resource interface for better bytes handling
-                obj = s3_resource.Object(bucket_name, filename)
-                response = obj.put(
-                    Body=image_bytes,
+                # Use BytesIO to ensure proper streaming
+                file_obj = BytesIO(image_bytes)
+                
+                # Use client.put_object with explicit Content-Length
+                response = s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key=filename,
+                    Body=file_obj,
+                    ContentLength=file_size,
                     ContentType='image/jpeg',
                     ACL='public-read'
                 )

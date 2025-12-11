@@ -1,3 +1,12 @@
+export interface VerificationPlan {
+    task_category: string;
+    success_criteria: string[];
+    rejection_criteria: string[];
+    visual_checks: string[];
+    location_required: boolean;
+    comparison_mode: string;
+}
+
 export interface JobDict {
     job_id: number;
     client_address: string;
@@ -20,7 +29,7 @@ export interface JobDict {
         verified: boolean;
         verdict: string;
     } | null;
-    verification_plan?: Record<string, any>;
+    verification_plan?: VerificationPlan;
 }
 
 export interface WorkerStats {

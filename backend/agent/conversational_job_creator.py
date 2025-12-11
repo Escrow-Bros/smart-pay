@@ -261,6 +261,41 @@ class ConversationalJobCreator:
             
         except json.JSONDecodeError as e:
             print(f"❌ JSON parsing error: {e}")
+            print(f"   Raw response (first 500 chars): {response_text[:500] if response_text else 'None'}")
+            
+            # Try to extract partial data if possible
+            try:
+                # Sometimes the JSON is truncated or has trailing content
+                # Try to find the JSON object boundaries
+                import re
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    cleaned_json = json_match.group(0)
+                    response_data = json.loads(cleaned_json)
+                    print("✅ Successfully recovered from partial JSON")
+                    
+                    # Update state with recovered data
+                    state.update_extracted_data(response_data.get("extracted_data", {}))
+                    state.update_verification_requirements(response_data.get("verification_requirements", {}))
+                    state.current_step = response_data.get("current_step", state.current_step)
+                    state.is_complete = response_data.get("is_complete", False)
+                    
+                    # Add AI response to history
+                    ai_message = response_data.get("ai_message", "I'm having trouble processing that. Could you rephrase?")
+                    state.add_message("assistant", ai_message)
+                    
+                    # Add current state info to response
+                    response_data["session_state"] = {
+                        "extracted_data": state.extracted_data,
+                        "verification_requirements": state.verification_requirements,
+                        "missing_fields": state.get_missing_fields(),
+                        "is_complete": state.is_complete
+                    }
+                    
+                    return response_data
+            except Exception as recovery_error:
+                print(f"   JSON recovery failed: {recovery_error}")
+            
             # Fallback response for malformed AI response
             fallback = self._build_fallback_response(
                 state, 
