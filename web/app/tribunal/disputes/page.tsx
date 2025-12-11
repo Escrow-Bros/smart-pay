@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
 
-export default function AllDisputesPage() {
+function DisputesContent() {
     const searchParams = useSearchParams();
     const statusFilter = searchParams.get('status') || 'all';
 
@@ -27,14 +27,14 @@ export default function AllDisputesPage() {
     const fetchDisputes = async () => {
         setIsLoading(true);
         setError(null);
-        
+
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/disputes`);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
 
             if (data.success) {
@@ -63,7 +63,7 @@ export default function AllDisputesPage() {
         // Search filter
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(d => 
+            filtered = filtered.filter(d =>
                 d.job_id.toString().includes(query) ||
                 d.reason.toLowerCase().includes(query) ||
                 d.description?.toLowerCase().includes(query) ||
@@ -233,17 +233,17 @@ export default function AllDisputesPage() {
     );
 }
 
-function FilterButton({ 
-    label, 
-    count, 
-    isActive, 
-    onClick, 
-    color = 'gray' 
-}: { 
-    label: string; 
-    count: number; 
-    isActive: boolean; 
-    onClick: () => void; 
+function FilterButton({
+    label,
+    count,
+    isActive,
+    onClick,
+    color = 'gray'
+}: {
+    label: string;
+    count: number;
+    isActive: boolean;
+    onClick: () => void;
     color?: string;
 }) {
     const colorClasses = {
@@ -274,5 +274,17 @@ function StatusBadge({ status }: { status: string }) {
         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClasses}`}>
             {status.replace('_', ' ')}
         </span>
+    );
+}
+
+export default function AllDisputesPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+                <div className="text-gray-500">Loading disputes...</div>
+            </div>
+        }>
+            <DisputesContent />
+        </Suspense>
     );
 }
