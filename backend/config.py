@@ -42,16 +42,3 @@ class DatabaseConfig:
             "Please set it in your .env file:\n"
             "DATABASE_URL=postgresql://postgres:password@db.xxx.supabase.co:5432/postgres"
         )
-    
-    @classmethod
-    def validate(cls):
-        """Validate that required configuration is present"""
-        if not cls.SUDO_API_KEY:
-            raise ValueError("SUDO_API_KEY not found in environment variables")
-        if not cls.SUDO_SERVER_URL:
-            raise ValueError("SUDO_SERVER_URL not found in environment variables")
-        return True
-
-
-# Validate on import
-AgentConfig.validate()

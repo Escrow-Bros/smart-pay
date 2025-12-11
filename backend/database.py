@@ -205,6 +205,17 @@ class Database:
             cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC")
             return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
     
+    def get_jobs_by_status(self, status: str) -> List[Dict]:
+        """Get all jobs with specific status"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT * FROM jobs 
+                WHERE status = %s 
+                ORDER BY created_at DESC
+            """, (status,))
+            return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
+    
     def get_disputes(self, status: str = None) -> List[Dict]:
         """Get disputes, optionally filtered by status"""
         with self.get_connection() as conn:
