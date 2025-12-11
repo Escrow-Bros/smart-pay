@@ -5,6 +5,7 @@ Handles uploading images and files to IPFS via 4Everland with retry logic
 import os
 import time
 import httpx
+from io import BytesIO
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -33,47 +34,79 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
         print("Required: EVERLAND_BUCKET_NAME, EVERLAND_ACCESS_KEY, EVERLAND_SECRET_KEY")
         return None
     
+    # Try boto3 S3-compatible upload (most reliable for 4Everland)
     try:
-        # 4Everland uses S3-compatible API
         import boto3
         from botocore.exceptions import ClientError
+        from boto3.s3.transfer import TransferConfig
+        from botocore.client import Config
         
-        # Initialize S3 client for 4Everland
-        s3_client = boto3.client(
+        print(f"[IPFS] Initializing S3 client for 4Everland...")
+        
+        # Transfer configuration to disable multipart uploads (forces Content-Length header)
+        transfer_config = TransferConfig(
+            multipart_threshold=100 * 1024 * 1024,  # Only use multipart for files > 100MB
+            use_threads=False
+        )
+        
+        # Initialize S3 resource (better for put operations)
+        s3_resource = boto3.resource(
             's3',
             endpoint_url=endpoint,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
-            region_name='us-west-1'  # 4Everland default region
+            region_name='us-west-1',
+            config=Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'}
+            )
         )
+        
+        file_size = len(image_bytes)
         
         # Retry logic with exponential backoff
         last_error = None
         for attempt in range(max_retries):
             try:
-                # Upload to 4Everland bucket
-                s3_client.put_object(
-                    Bucket=bucket_name,
-                    Key=filename,
+                print(f"[IPFS] Upload attempt {attempt + 1}/{max_retries} - Uploading {file_size} bytes to {bucket_name}/{filename}")
+                
+                # Use resource interface for better bytes handling
+                obj = s3_resource.Object(bucket_name, filename)
+                response = obj.put(
                     Body=image_bytes,
-                    ContentType='image/jpeg'
+                    ContentType='image/jpeg',
+                    ACL='public-read'
                 )
+                
+                print(f"[IPFS] Upload response: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
                 
                 # Generate public IPFS URL
                 endpoint_clean = endpoint.rstrip('/')
                 public_url = f"{endpoint_clean}/{bucket_name}/{filename}"
                 
-                print(f"✅ Successfully uploaded to IPFS: {public_url}" + (f" (attempt {attempt + 1}/{max_retries})" if attempt > 0 else ""))
+                print(f"✅ Successfully uploaded to IPFS ({file_size} bytes): {public_url}" + (f" (attempt {attempt + 1}/{max_retries})" if attempt > 0 else ""))
                 return public_url
                 
             except ClientError as e:
-                last_error = e
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                error_msg = e.response.get('Error', {}).get('Message', str(e))
+                last_error = f"{error_code}: {error_msg}"
+                
                 if attempt < max_retries - 1:
                     wait_time = (2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
-                    print(f"⚠️ Upload attempt {attempt + 1} failed, retrying in {wait_time}s...")
+                    print(f"⚠️ Upload attempt {attempt + 1} failed ({error_code}), retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    print(f"❌ Error uploading to 4Everland after {max_retries} attempts: {e}")
+                    print(f"❌ Error uploading to 4Everland after {max_retries} attempts: {last_error}")
+                    return None
+            except Exception as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt)
+                    print(f"⚠️ Upload attempt {attempt + 1} failed ({e}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Unexpected error after {max_retries} attempts: {last_error}")
                     return None
         
         return None
@@ -82,7 +115,7 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
         print("❌ Error: boto3 not installed. Run: pip install boto3")
         return None
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"❌ Unexpected boto3 error: {e}")
         return None
 
 

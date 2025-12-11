@@ -65,6 +65,22 @@ class Database:
             except sqlite3.OperationalError:
                 pass
             
+            # Migration: Add location columns if they don't exist
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN location TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN latitude REAL")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN longitude REAL")
+            except sqlite3.OperationalError:
+                pass
+            
             # Create indexes for fast queries
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON jobs(status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_client ON jobs(client_address)")

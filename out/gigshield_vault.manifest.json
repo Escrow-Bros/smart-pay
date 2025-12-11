@@ -5,7 +5,7 @@
         "methods": [
             {
                 "name": "_deploy",
-                "offset": 2613,
+                "offset": 1845,
                 "parameters": [
                     {
                         "type": "Any",
@@ -62,6 +62,14 @@
                     {
                         "type": "String",
                         "name": "reference_urls"
+                    },
+                    {
+                        "type": "Integer",
+                        "name": "latitude"
+                    },
+                    {
+                        "type": "Integer",
+                        "name": "longitude"
                     }
                 ],
                 "safe": false,
@@ -69,7 +77,7 @@
             },
             {
                 "name": "get_job_client",
-                "offset": 275,
+                "offset": 338,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -81,7 +89,7 @@
             },
             {
                 "name": "get_job_required",
-                "offset": 334,
+                "offset": 397,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -93,7 +101,7 @@
             },
             {
                 "name": "get_job_status",
-                "offset": 378,
+                "offset": 441,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -105,7 +113,7 @@
             },
             {
                 "name": "get_job_details",
-                "offset": 420,
+                "offset": 483,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -117,7 +125,7 @@
             },
             {
                 "name": "get_job_reference_urls",
-                "offset": 464,
+                "offset": 527,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -129,7 +137,7 @@
             },
             {
                 "name": "get_job_worker",
-                "offset": 515,
+                "offset": 578,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -140,36 +148,60 @@
                 "returntype": "Hash160"
             },
             {
+                "name": "get_job_latitude",
+                "offset": 637,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Integer"
+            },
+            {
+                "name": "get_job_longitude",
+                "offset": 681,
+                "parameters": [
+                    {
+                        "type": "Integer",
+                        "name": "job_id"
+                    }
+                ],
+                "safe": false,
+                "returntype": "Integer"
+            },
+            {
                 "name": "get_agent_addr",
-                "offset": 574,
+                "offset": 726,
                 "parameters": [],
                 "safe": false,
                 "returntype": "Hash160"
             },
             {
                 "name": "get_treasury_addr",
-                "offset": 624,
+                "offset": 776,
                 "parameters": [],
                 "safe": false,
                 "returntype": "Hash160"
             },
             {
                 "name": "get_fee_bps",
-                "offset": 677,
+                "offset": 829,
                 "parameters": [],
                 "safe": false,
                 "returntype": "Integer"
             },
             {
                 "name": "get_owner",
-                "offset": 707,
+                "offset": 859,
                 "parameters": [],
                 "safe": false,
                 "returntype": "Hash160"
             },
             {
                 "name": "set_owner",
-                "offset": 752,
+                "offset": 904,
                 "parameters": [
                     {
                         "type": "Hash160",
@@ -181,7 +213,7 @@
             },
             {
                 "name": "set_agent",
-                "offset": 880,
+                "offset": 1032,
                 "parameters": [
                     {
                         "type": "Hash160",
@@ -193,7 +225,7 @@
             },
             {
                 "name": "set_treasury",
-                "offset": 964,
+                "offset": 1116,
                 "parameters": [
                     {
                         "type": "Hash160",
@@ -205,7 +237,7 @@
             },
             {
                 "name": "set_fee_bps",
-                "offset": 1051,
+                "offset": 1203,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -217,7 +249,7 @@
             },
             {
                 "name": "assign_worker",
-                "offset": 1145,
+                "offset": 1297,
                 "parameters": [
                     {
                         "type": "Integer",
@@ -233,58 +265,11 @@
             },
             {
                 "name": "release_funds",
-                "offset": 1290,
+                "offset": 1442,
                 "parameters": [
                     {
                         "type": "Integer",
                         "name": "job_id"
-                    }
-                ],
-                "safe": false,
-                "returntype": "Boolean"
-            },
-            {
-                "name": "set_arbiter",
-                "offset": 1693,
-                "parameters": [
-                    {
-                        "type": "Hash160",
-                        "name": "arbiter"
-                    }
-                ],
-                "safe": false,
-                "returntype": "Boolean"
-            },
-            {
-                "name": "get_arbiter",
-                "offset": 1779,
-                "parameters": [],
-                "safe": false,
-                "returntype": "Hash160"
-            },
-            {
-                "name": "refund_client",
-                "offset": 1831,
-                "parameters": [
-                    {
-                        "type": "Integer",
-                        "name": "job_id"
-                    }
-                ],
-                "safe": false,
-                "returntype": "Boolean"
-            },
-            {
-                "name": "arbiter_resolve",
-                "offset": 2155,
-                "parameters": [
-                    {
-                        "type": "Integer",
-                        "name": "job_id"
-                    },
-                    {
-                        "type": "Boolean",
-                        "name": "approve_worker"
                     }
                 ],
                 "safe": false,
@@ -293,7 +278,7 @@
         ],
         "events": [
             {
-                "name": "WorkerAssigned",
+                "name": "FundsReleased",
                 "parameters": [
                     {
                         "name": "job_id",
@@ -302,43 +287,17 @@
                     {
                         "name": "worker",
                         "type": "Hash160"
-                    }
-                ]
-            },
-            {
-                "name": "FundsRefunded",
-                "parameters": [
+                    },
                     {
-                        "name": "job_id",
+                        "name": "worker_amount",
                         "type": "Integer"
                     },
                     {
-                        "name": "client",
-                        "type": "Hash160"
-                    },
-                    {
-                        "name": "amount",
+                        "name": "fee_amount",
                         "type": "Integer"
                     },
                     {
-                        "name": "arbiter",
-                        "type": "Hash160"
-                    }
-                ]
-            },
-            {
-                "name": "DisputeResolved",
-                "parameters": [
-                    {
-                        "name": "job_id",
-                        "type": "Integer"
-                    },
-                    {
-                        "name": "resolution",
-                        "type": "String"
-                    },
-                    {
-                        "name": "arbiter",
+                        "name": "treasury",
                         "type": "Hash160"
                     }
                 ]
@@ -365,7 +324,7 @@
                 ]
             },
             {
-                "name": "FundsReleased",
+                "name": "WorkerAssigned",
                 "parameters": [
                     {
                         "name": "job_id",
@@ -373,18 +332,6 @@
                     },
                     {
                         "name": "worker",
-                        "type": "Hash160"
-                    },
-                    {
-                        "name": "worker_amount",
-                        "type": "Integer"
-                    },
-                    {
-                        "name": "fee_amount",
-                        "type": "Integer"
-                    },
-                    {
-                        "name": "treasury",
                         "type": "Hash160"
                     }
                 ]

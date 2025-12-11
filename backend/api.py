@@ -986,7 +986,9 @@ async def create_job(request: CreateJobRequest):
             client_address=request.client_address,
             description=full_details,
             reference_photos=request.reference_photos,
-            amount=request.amount
+            amount=request.amount,
+            latitude=request.latitude,
+            longitude=request.longitude
         )
         
         if not result["success"]:
