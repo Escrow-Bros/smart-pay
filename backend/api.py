@@ -20,11 +20,11 @@ import logging
 from collections import defaultdict
 from threading import Lock
 
-# Internal imports
+# Internal imports  
 from backend.database import Database
 
-# Database instance - Supabase PostgreSQL only
-db = Database()
+# Database instance - initialized at startup to allow env vars to load
+db = None
 
 def get_db():
     """Dependency to get database instance"""
@@ -350,9 +350,14 @@ websocket_manager = ConnectionManager()
 @app.on_event("startup")
 async def startup_recovery():
     """
-    Recover pending jobs after server restart.
+    Initialize database and recover pending jobs after server restart.
     Restarts blockchain monitors for any jobs stuck in PAYMENT_PENDING.
     """
+    # Initialize database connection
+    global db
+    db = Database()
+    print("✅ Database connection initialized")
+    
     print("🔄 Starting recovery scan for pending jobs...")
     
     try:

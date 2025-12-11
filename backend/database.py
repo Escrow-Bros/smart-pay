@@ -18,6 +18,7 @@ class Database:
             raise ValueError("DATABASE_URL environment variable not set")
         
         # Create connection pool (min 1, max 10 connections)
+        # Connection is made lazily on first query
         self.pool = SimpleConnectionPool(1, 10, self.connection_string)
         self._init_db()
     
