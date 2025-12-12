@@ -173,13 +173,13 @@ class Database:
     
     
     def get_worker_completed_jobs(self, worker_address: str) -> List[Dict]:
-        """Get worker's completed jobs (history)"""
+        """Get all worker's jobs (all statuses for history view)"""
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute("""
                 SELECT * FROM jobs 
-                WHERE worker_address = %s AND status = 'COMPLETED'
-                ORDER BY completed_at DESC
+                WHERE worker_address = %s 
+                ORDER BY COALESCE(completed_at, updated_at, created_at) DESC
             """, (worker_address,))
             return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
     
