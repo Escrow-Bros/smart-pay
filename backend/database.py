@@ -602,9 +602,9 @@ class Database:
                         UPDATE jobs SET status = 'COMPLETED', completed_at = CURRENT_TIMESTAMP
                         WHERE job_id = %s
                     """, (job_id,))
-                elif resolution == 'REJECTED':
+                elif resolution == 'REFUNDED':
                     cursor.execute("""
-                        UPDATE jobs SET status = 'OPEN', worker_address = NULL, proof_photos = NULL
+                        UPDATE jobs SET status = 'REFUNDED'
                         WHERE job_id = %s
                     """, (job_id,))
         
