@@ -166,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const [availData, activeData, historyData, statsData] = await Promise.all([
                     apiClient.getAvailableJobs(),
                     apiClient.getWorkerCurrentJobs(state.walletAddress),
-                    apiClient.getWorkerHistory(state.walletAddress),
+                    apiClient.getAllWorkerJobs(state.walletAddress),
                     apiClient.getWorkerStats(state.walletAddress),
                 ]);
                 setState(prev => ({
@@ -201,19 +201,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const reconnectAttemptsRef = useRef(0);
     const maxReconnectAttempts = 10;
     const isIntentionalClose = useRef(false);
-    
+
     useEffect(() => {
         if (!state.walletAddress) return;
 
         const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         let apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        
+
         // Ensure apiUrl has a protocol before replacing
         if (!apiUrl.match(/^https?:\/\//)) {
             const defaultProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https://' : 'http://';
             apiUrl = defaultProtocol + apiUrl;
         }
-        
+
         const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
 
         const connectWebSocket = () => {
@@ -224,7 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             try {
                 const ws = new WebSocket(`${wsUrl}/ws/${state.walletAddress}`);
-                
+
                 // Set connection timeout (30 seconds)
                 const connectionTimeout = setTimeout(() => {
                     if (ws.readyState !== WebSocket.OPEN) {
@@ -232,13 +232,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         ws.close();
                     }
                 }, 30000);
-                
+
                 ws.onopen = () => {
                     clearTimeout(connectionTimeout);
                     console.log('🔌 WebSocket connected globally');
                     reconnectAttemptsRef.current = 0; // Reset on successful connection
                 };
-                
+
                 ws.onmessage = (event) => {
                     let data;
                     try {
@@ -248,7 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         return;
                     }
                     console.log('📨 WebSocket message:', data);
-                    
+
                     // Handle different event types
                     if (data.type === 'JOB_COMPLETED') {
                         toast.dismiss(`job-${data.job_id}`);
@@ -290,7 +290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         fetchDataRef.current();
                     }
                 };
-                
+
                 ws.onerror = (error) => {
                     clearTimeout(connectionTimeout);
                     console.error('❌ WebSocket error:', error);
@@ -301,19 +301,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         });
                     }
                 };
-                
+
                 ws.onclose = (event) => {
                     clearTimeout(connectionTimeout);
                     console.log('🔌 WebSocket disconnected', event.code, event.reason);
-                    
+
                     // Don't reconnect if this was an intentional close
                     if (isIntentionalClose.current) {
                         return;
                     }
-                    
+
                     // Attempt reconnection with exponential backoff
                     reconnectAttemptsRef.current += 1;
-                    
+
                     if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
                         console.error('❌ Max WebSocket reconnection attempts reached');
                         toast.error('Unable to establish real-time connection. Please refresh the page.', {
@@ -321,16 +321,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         });
                         return;
                     }
-                    
+
                     // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
                     const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000);
                     console.log(`🔄 Reconnecting in ${backoffDelay / 1000}s... (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
-                    
+
                     reconnectTimeoutRef.current = setTimeout(() => {
                         connectWebSocket();
                     }, backoffDelay);
                 };
-                
+
                 wsRef.current = ws;
             } catch (error) {
                 console.error('Failed to create WebSocket:', error);
@@ -345,15 +345,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isIntentionalClose.current = false;
         reconnectAttemptsRef.current = 0;  // Reset failure count for new wallet
         connectWebSocket();
-        
+
         // Cleanup on unmount or wallet change
         return () => {
             isIntentionalClose.current = true;
-            
+
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
             }
-            
+
             if (wsRef.current) {
                 wsRef.current.close();
             }
@@ -366,14 +366,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         initializePriceCache().catch(error => {
             console.error('Failed to initialize price cache:', error);
         });
-        
+
         // Refresh price every 5 minutes
         const interval = setInterval(() => {
             getGasUsdPrice().catch(error => {
                 console.error('Failed to refresh GAS price:', error);
             });
         }, 5 * 60 * 1000);
-        
+
         return () => clearInterval(interval);
     }, []);
 
