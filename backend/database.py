@@ -218,13 +218,13 @@ class Database:
             return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
     
     def get_worker_active_jobs(self, worker_address: str) -> List[Dict]:
-        """Get worker's active jobs (IN_PROGRESS + SUBMITTED + DISPUTED)"""
+        """Get worker's active jobs (IN_PROGRESS + SUBMITTED + DISPUTED + PAYMENT_PENDING)"""
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute("""
                 SELECT * FROM jobs 
                 WHERE worker_address = %s 
-                AND status IN ('IN_PROGRESS', 'SUBMITTED', 'DISPUTED')
+                AND status IN ('IN_PROGRESS', 'SUBMITTED', 'DISPUTED', 'PAYMENT_PENDING')
                 ORDER BY assigned_at DESC
             """, (worker_address,))
             return [self._row_to_dict(dict(row)) for row in cursor.fetchall()]
@@ -436,6 +436,40 @@ class Database:
             
             if cursor.rowcount == 0:
                 raise ValueError("Job not found or not in correct state")
+        
+        return self.get_job(job_id)
+    
+    def set_payment_pending(self, job_id: int, verification_result: Dict = None, tx_hash: str = None) -> Dict:
+        """Mark job as PAYMENT_PENDING after payment TX is broadcast (awaiting blockchain confirmation)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE jobs 
+                SET status = 'PAYMENT_PENDING', 
+                    verification_summary = %s,
+                    tx_hash = COALESCE(%s, tx_hash)
+                WHERE job_id = %s
+            """, (json.dumps(verification_result) if verification_result else None, tx_hash, job_id))
+            
+            if cursor.rowcount == 0:
+                raise ValueError("Job not found")
+        
+        return self.get_job(job_id)
+    
+    def complete_job(self, job_id: int, tx_hash: str = None) -> Dict:
+        """Mark job as COMPLETED after blockchain confirmation"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE jobs 
+                SET status = 'COMPLETED', 
+                    completed_at = CURRENT_TIMESTAMP,
+                    tx_hash = COALESCE(%s, tx_hash)
+                WHERE job_id = %s
+            """, (tx_hash, job_id))
+            
+            if cursor.rowcount == 0:
+                raise ValueError("Job not found")
         
         return self.get_job(job_id)
     

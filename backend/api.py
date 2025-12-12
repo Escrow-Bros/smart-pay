@@ -854,8 +854,8 @@ async def verify_payment_status(job_id: int):
         }
         
         # If blockchain shows COMPLETED but DB doesn't, sync them
-        if blockchain_status.get("status_name") == "COMPLETED" and job["status"] == "PAYMENT_PENDING":
-            print(f"   ✅ Blockchain shows COMPLETED but DB shows PAYMENT_PENDING. Syncing...")
+        if blockchain_status.get("status_name") == "COMPLETED" and job["status"] in ["PAYMENT_PENDING", "SUBMITTED", "IN_PROGRESS"]:
+            print(f"   ✅ Blockchain shows COMPLETED but DB shows {job['status']}. Syncing...")
             db.complete_job(job_id=job_id)
             
             # Notify worker of completion
@@ -872,7 +872,7 @@ async def verify_payment_status(job_id: int):
                 )
             
             diagnosis["synced"] = True
-            diagnosis["action_taken"] = "Successfully synced DB status to COMPLETED"
+            diagnosis["action_taken"] = f"Successfully synced DB status from {job['status']} to COMPLETED"
             print(f"   ✅ Job #{job_id} synced to COMPLETED")
         
         elif job["status"] == "PAYMENT_PENDING":
@@ -904,6 +904,96 @@ async def verify_payment_status(job_id: int):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to verify payment: {e!s}") from e
+
+
+@app.post("/api/jobs/{job_id}/retry-payment")
+async def retry_payment_release(job_id: int):
+    """
+    Retry releasing payment for a stuck job.
+    Use this when blockchain shows LOCKED but payment should have been released.
+    
+    This re-triggers the release_funds call to the blockchain.
+    """
+    try:
+        job = db.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        print(f"\n🔄 ===== RETRY PAYMENT RELEASE =====")
+        print(f"   Job ID: #{job_id}")
+        print(f"   DB Status: {job['status']}")
+        
+        # Check blockchain status
+        blockchain_status = await mcp.get_job_status(job_id)
+        print(f"   Blockchain Status: {blockchain_status.get('status_name')}")
+        
+        # Only retry if blockchain shows LOCKED (meaning funds are still escrowed)
+        if blockchain_status.get("status_name") != "LOCKED":
+            return {
+                "success": False,
+                "error": f"Cannot retry - blockchain status is {blockchain_status.get('status_name')}, not LOCKED",
+                "job_id": job_id,
+                "blockchain_status": blockchain_status.get("status_name"),
+                "db_status": job["status"]
+            }
+        
+        # Re-trigger payment release
+        print(f"   💰 Re-triggering release_funds on blockchain...")
+        release_result = await mcp.release_funds_on_chain(job_id=job_id)
+        
+        if release_result["success"]:
+            tx_hash = release_result["tx_hash"]
+            print(f"   ✅ Payment TX broadcasted: {tx_hash}")
+            print(f"   Worker will receive: {release_result.get('worker_paid_gas', 'N/A')} GAS")
+            print(f"   🔗 View TX: https://dora.coz.io/transaction/neo3/testnet/{tx_hash}")
+            
+            # Update DB to PAYMENT_PENDING
+            job = db.set_payment_pending(
+                job_id=job_id,
+                verification_result=job.get("verification_summary"),
+                tx_hash=tx_hash
+            )
+            
+            # Start background task to monitor confirmation
+            task = asyncio.create_task(
+                monitor_transaction_confirmation(
+                    job_id=job_id,
+                    tx_hash=tx_hash
+                )
+            )
+            task.add_done_callback(
+                lambda t: print(f"❌ Background task exception: {t.exception()}") if not t.cancelled() and t.exception() else None
+            )
+            
+            print(f"   ✅ Job #{job_id} status updated to PAYMENT_PENDING")
+            print(f"========================================\n")
+            
+            return {
+                "success": True,
+                "message": "Payment release re-triggered successfully!",
+                "job_id": job_id,
+                "tx_hash": tx_hash,
+                "worker_paid_gas": release_result.get("worker_paid_gas"),
+                "fee_collected_gas": release_result.get("fee_collected_gas"),
+                "explorer_url": f"https://dora.coz.io/transaction/neo3/testnet/{tx_hash}",
+                "new_status": "PAYMENT_PENDING"
+            }
+        else:
+            print(f"   ❌ Failed to release funds: {release_result.get('error')}")
+            return {
+                "success": False,
+                "error": release_result.get("error", "Unknown blockchain error"),
+                "job_id": job_id
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error retrying payment for job #{job_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to retry payment: {e!s}") from e
+
 
 
 @app.get("/api/jobs/{job_id}/status")
@@ -1292,11 +1382,17 @@ async def submit_proof(request: SubmitProofRequest):
         if worker_addr and not rate_limiter.is_allowed(worker_addr):
             raise HTTPException(status_code=429, detail="Too many proof submissions. Please wait before trying again.")
         
+        # Validate both proof photos and location
+        if not request.proof_photos or len(request.proof_photos) == 0:
+            raise HTTPException(status_code=400, detail="Proof photo(s) required.")
+        if not request.worker_location or not request.worker_location.get('lat') or not request.worker_location.get('lng'):
+            raise HTTPException(status_code=400, detail="Valid location required.")
+
         # Update with proof photos
         db.submit_proof(request.job_id, request.proof_photos)
-        
+
         print(f"🔍 Running Eye Agent verification for job #{request.job_id}...")
-        
+
         # Run Eye Agent verification
         verification = await verify_work(
             proof_photos=request.proof_photos,
@@ -1378,9 +1474,7 @@ async def submit_proof(request: SubmitProofRequest):
             
             # Add note if GPS failure detected
             if is_gps_failure:
-                dispute_reason_parts.append("
-
-⚠️ NOTE: This may be a GPS/location service failure, not worker fraud. Review carefully.")
+                dispute_reason_parts.append("\n\n⚠️ NOTE: This may be a GPS/location service failure, not worker fraud. Review carefully.")
             
             # Add specific issues if available
             if verification.get("issues"):

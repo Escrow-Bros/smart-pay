@@ -104,7 +104,7 @@ export default function WorkerCurrentJobPage() {
         steps.push(`🖼️  Step 1: Comparing before/after photos...`);
         steps.push(`   - Checking if photos show same location/object`);
         steps.push(`   - Analyzing visual changes and transformations`);
-        
+
         // Add comparison insights
         if (job.verification_summary.comparison) {
             const comp = job.verification_summary.comparison;
@@ -123,7 +123,7 @@ export default function WorkerCurrentJobPage() {
         }
 
         steps.push(`✅ Step 2: Verifying requirements...`);
-        
+
         // Add requirement checks
         if (job.verification_plan) {
             const plan = job.verification_plan;
@@ -138,7 +138,7 @@ export default function WorkerCurrentJobPage() {
         steps.push(`⚖️  Step 3: Making final decision...`);
         steps.push(`   - Analyzing all verification signals`);
         steps.push(`   - Calculating quality score`);
-        
+
         if (job.verification_summary.verified) {
             steps.push(`✅ APPROVED: ${job.verification_summary.verdict}`);
             steps.push(`📊 Quality Score: ${job.verification_summary.score}/10`);
@@ -235,16 +235,18 @@ export default function WorkerCurrentJobPage() {
             },
             (error) => {
                 console.error('Geolocation error:', error);
+                setPendingSubmit(false);
 
-                // Use hardcoded fallback location (San Jose, CA)
-                console.log('Using fallback location: San Jose, CA');
-                const fallbackLocation = {
-                    lat: 37.3359184,
-                    lng: -121.8878792,
-                    accuracy: 100
-                };
-
-                submitProofWithLocation(fallbackLocation);
+                // Show specific error message based on error code
+                if (error.code === 1) {
+                    toast.error('📍 Location permission denied. Please enable location access and try again.');
+                } else if (error.code === 2) {
+                    toast.error('📍 Location unavailable. Please check your GPS settings and try again.');
+                } else if (error.code === 3) {
+                    toast.error('📍 Location request timed out. Please try again.');
+                } else {
+                    toast.error('📍 Unable to get your location. Please enable GPS and try again.');
+                }
             },
             {
                 enableHighAccuracy: true,
@@ -299,13 +301,14 @@ export default function WorkerCurrentJobPage() {
             return;
         }
 
-        // If permission already granted, directly get location
+        // Start the location request flow
+        setPendingSubmit(true);
+
         if (locationPermission === 'granted') {
-            console.log('Location permission already granted, getting location directly');
+            // Permission already granted, request location directly
             handleRequestLocation();
         } else {
-            // Show location permission modal
-            setPendingSubmit(true);
+            // Show modal to explain why we need location
             setShowLocationModal(true);
         }
     };
@@ -493,45 +496,41 @@ export default function WorkerCurrentJobPage() {
                                     </svg>
                                     Job Progress
                                 </h3>
-                                
+
                                 <div className="space-y-4">
                                     {getJobTimeline(activeJob).map((stage, index, arr) => (
                                         <div key={stage.id} className="flex items-start gap-4">
                                             {/* Icon */}
                                             <div className="flex flex-col items-center">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all ${
-                                                    stage.status === 'completed' 
-                                                        ? 'bg-green-500/20 text-green-400 border-2 border-green-500' 
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all ${stage.status === 'completed'
+                                                        ? 'bg-green-500/20 text-green-400 border-2 border-green-500'
                                                         : stage.status === 'current'
-                                                        ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500 animate-pulse'
-                                                        : 'bg-slate-800/50 text-slate-600 border-2 border-slate-700'
-                                                }`}>
+                                                            ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500 animate-pulse'
+                                                            : 'bg-slate-800/50 text-slate-600 border-2 border-slate-700'
+                                                    }`}>
                                                     {stage.icon}
                                                 </div>
                                                 {index < arr.length - 1 && (
-                                                    <div className={`w-0.5 h-12 mt-2 ${
-                                                        stage.status === 'completed' ? 'bg-green-500/50' : 'bg-slate-700'
-                                                    }`} />
+                                                    <div className={`w-0.5 h-12 mt-2 ${stage.status === 'completed' ? 'bg-green-500/50' : 'bg-slate-700'
+                                                        }`} />
                                                 )}
                                             </div>
-                                            
+
                                             {/* Content */}
                                             <div className="flex-1 pb-4">
-                                                <h4 className={`font-medium mb-1 ${
-                                                    stage.status === 'completed' ? 'text-green-400' :
-                                                    stage.status === 'current' ? 'text-blue-400' :
-                                                    'text-slate-500'
-                                                }`}>
+                                                <h4 className={`font-medium mb-1 ${stage.status === 'completed' ? 'text-green-400' :
+                                                        stage.status === 'current' ? 'text-blue-400' :
+                                                            'text-slate-500'
+                                                    }`}>
                                                     {stage.label}
                                                 </h4>
-                                                <p className={`text-sm ${
-                                                    stage.status === 'completed' ? 'text-slate-400' :
-                                                    stage.status === 'current' ? 'text-slate-300' :
-                                                    'text-slate-600'
-                                                }`}>
+                                                <p className={`text-sm ${stage.status === 'completed' ? 'text-slate-400' :
+                                                        stage.status === 'current' ? 'text-slate-300' :
+                                                            'text-slate-600'
+                                                    }`}>
                                                     {stage.description}
                                                 </p>
-                                                
+
                                                 {/* Special handling for payment pending */}
                                                 {stage.id === 'payment' && stage.status === 'current' && activeJob.status === 'PAYMENT_PENDING' && (
                                                     <div className="mt-3 space-y-2">
@@ -568,7 +567,7 @@ export default function WorkerCurrentJobPage() {
                                                                             method: 'POST'
                                                                         });
                                                                         const data = await response.json();
-                                                                        
+
                                                                         if (data.synced) {
                                                                             toast.success(data.action_taken || 'Payment verified!');
                                                                             await fetchData();
@@ -588,15 +587,14 @@ export default function WorkerCurrentJobPage() {
                                                         </div>
                                                     </div>
                                                 )}
-                                                
+
                                                 {/* Show verdict for verification stage */}
                                                 {stage.id === 'verification' && activeJob.verification_summary && (
                                                     <div className="mt-2 space-y-2">
-                                                        <div className={`p-3 rounded-lg text-sm ${
-                                                            activeJob.verification_summary.verified 
+                                                        <div className={`p-3 rounded-lg text-sm ${activeJob.verification_summary.verified
                                                                 ? 'bg-green-900/20 border border-green-800 text-green-300'
                                                                 : 'bg-red-900/20 border border-red-800 text-red-300'
-                                                        }`}>
+                                                            }`}>
                                                             {activeJob.verification_summary.verdict}
                                                         </div>
                                                         <button
@@ -628,7 +626,7 @@ export default function WorkerCurrentJobPage() {
                                     {activeJob.status === 'DISPUTED' ? 'Resubmit Proof of Completion' : 'Submit Proof of Completion'}
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
-                                    {activeJob.status === 'DISPUTED' 
+                                    {activeJob.status === 'DISPUTED'
                                         ? 'Your previous submission was disputed. Please upload new photos addressing the issues.'
                                         : 'Upload photos showing the completed work to receive payment.'}
                                 </p>
@@ -690,19 +688,17 @@ export default function WorkerCurrentJobPage() {
                                     const isSuccess = step.includes('✅') || step.includes('✓');
                                     const isError = step.includes('❌');
                                     const isSubItem = step.startsWith('   ');
-                                    
+
                                     return (
                                         <div
                                             key={index}
-                                            className={`animate-in slide-in-from-left duration-300 ${
-                                                isHeader
+                                            className={`animate-in slide-in-from-left duration-300 ${isHeader
                                                     ? 'font-semibold text-white text-base mt-4 first:mt-0'
                                                     : isSubItem
-                                                    ? 'text-slate-300 text-sm ml-4 pl-4 border-l-2 border-slate-700'
-                                                    : 'text-slate-300 text-sm'
-                                            } ${
-                                                isSuccess ? 'text-green-400' : isError ? 'text-red-400' : ''
-                                            }`}
+                                                        ? 'text-slate-300 text-sm ml-4 pl-4 border-l-2 border-slate-700'
+                                                        : 'text-slate-300 text-sm'
+                                                } ${isSuccess ? 'text-green-400' : isError ? 'text-red-400' : ''
+                                                }`}
                                             style={{ animationDelay: `${index * 50}ms` }}
                                         >
                                             {step}
@@ -713,31 +709,28 @@ export default function WorkerCurrentJobPage() {
 
                             {/* Summary Card */}
                             {activeJob.verification_summary && (
-                                <div className={`mt-6 p-4 rounded-xl border-2 ${
-                                    activeJob.verification_summary.verified
+                                <div className={`mt-6 p-4 rounded-xl border-2 ${activeJob.verification_summary.verified
                                         ? 'bg-green-900/20 border-green-700'
                                         : 'bg-red-900/20 border-red-700'
-                                }`}>
+                                    }`}>
                                     <div className="flex items-start justify-between mb-3">
                                         <div>
-                                            <h4 className={`font-bold text-lg ${
-                                                activeJob.verification_summary.verified ? 'text-green-400' : 'text-red-400'
-                                            }`}>
+                                            <h4 className={`font-bold text-lg ${activeJob.verification_summary.verified ? 'text-green-400' : 'text-red-400'
+                                                }`}>
                                                 {activeJob.verification_summary.verified ? '✅ Work Approved' : '❌ Work Rejected'}
                                             </h4>
                                             <p className="text-slate-300 text-sm mt-1">
                                                 {activeJob.verification_summary.verdict}
                                             </p>
                                         </div>
-                                        <div className={`px-3 py-1 rounded-full font-bold ${
-                                            activeJob.verification_summary.verified
+                                        <div className={`px-3 py-1 rounded-full font-bold ${activeJob.verification_summary.verified
                                                 ? 'bg-green-500/20 text-green-400'
                                                 : 'bg-red-500/20 text-red-400'
-                                        }`}>
+                                            }`}>
                                             {activeJob.verification_summary.score}/10
                                         </div>
                                     </div>
-                                    
+
                                     {/* Additional Details */}
                                     {activeJob.verification_summary.comparison && (
                                         <div className="mt-3 pt-3 border-t border-slate-700">

@@ -1,7 +1,7 @@
 from typing import Any
 from boa3.sc.compiletime import public
 from boa3.sc.types import UInt160
-from boa3.sc.runtime import calling_script_hash, check_witness, executing_script_hash
+from boa3.sc.runtime import calling_script_hash, check_witness, executing_script_hash, script_container
 from boa3.sc.storage import (
     get_uint160,
     put_uint160,
@@ -20,6 +20,9 @@ STATUS_LOCKED = 2
 STATUS_COMPLETED = 3
 STATUS_DISPUTED = 4
 STATUS_REFUNDED = 5
+
+# Contract Version (change this to redeploy with new hash)
+VERSION = "2.0.0-2024-12-11"
 
 # Events
 on_job_created = CreateNewEvent(
@@ -78,15 +81,26 @@ def _key(field: bytes, job_id: int) -> bytes:
 def _deploy(data: Any, update: bool):
     """
     Initialize contract storage on deployment.
-    Sets the deployer as owner and initializes default values.
+    Automatically sets the deployer as owner, agent, arbiter, and treasury.
     
-    :param data: Can contain initialization data [agent_addr, treasury_addr, fee_bps]
+    :param data: Not used (reserved for future)
     :param update: True if contract is being updated
     """
     if not update:
+        # Get the deployer's script hash (sender of the deployment transaction)
+        deployer = script_container.sender
+        
+        # Initialize all roles to deployer - can be changed later via set_* functions
+        put_uint160(b'owner', deployer)
+        put_uint160(b'agent_addr', deployer)
+        put_uint160(b'arbiter_addr', deployer)
+        put_uint160(b'treasury_addr', deployer)
+        
         # Initialize default fee: 5% (500 basis points)
         put_int(b'fee_bps', 500)
-        # Owner must be set via set_owner after deployment
+        
+        # Contract version for tracking deployments
+        put_str(b'version', "2.0.2-2024-12-11")
 
 @public
 def onNEP17Payment(from_address: UInt160, amount: int, data: Any):

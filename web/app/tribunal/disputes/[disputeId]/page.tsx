@@ -195,7 +195,7 @@ export default function DisputeDetailPage() {
                 <div className="space-y-4">
                     <InfoField label="Raised By" value={shortenAddress(dispute.raised_by || '')} />
                     <InfoField label="Reason" value={dispute.reason} isLong />
-                    
+
                     {/* AI Verdict Breakdown */}
                     {dispute.ai_verdict && typeof dispute.ai_verdict === 'object' && (
                         <div className="space-y-4">
@@ -205,11 +205,10 @@ export default function DisputeDetailPage() {
                                 </label>
                                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                                            dispute.ai_verdict.verified 
-                                                ? 'bg-green-100 text-green-800' 
+                                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${dispute.ai_verdict.verified
+                                                ? 'bg-green-100 text-green-800'
                                                 : 'bg-red-100 text-red-800'
-                                        }`}>
+                                            }`}>
                                             {dispute.ai_verdict.verdict || (dispute.ai_verdict.verified ? 'APPROVED' : 'REJECTED')}
                                         </span>
                                         {dispute.ai_verdict.confidence != null && (
@@ -221,7 +220,7 @@ export default function DisputeDetailPage() {
                                     <p className="text-sm text-purple-900 mb-3">
                                         {dispute.ai_verdict.reason || 'No reason provided'}
                                     </p>
-                                    
+
                                     {/* Score Breakdown */}
                                     {dispute.ai_verdict.breakdown && (
                                         <div className="mt-4 pt-4 border-t border-purple-200">
@@ -232,9 +231,8 @@ export default function DisputeDetailPage() {
                                                         <span className="text-purple-700 capitalize">
                                                             {key.replace(/_/g, ' ')}:
                                                         </span>
-                                                        <span className={`font-semibold ${
-                                                            value === 0 ? 'text-red-600' : 'text-purple-900'
-                                                        }`}>
+                                                        <span className={`font-semibold ${value === 0 ? 'text-red-600' : 'text-purple-900'
+                                                            }`}>
                                                             {value}
                                                         </span>
                                                     </div>
@@ -242,7 +240,7 @@ export default function DisputeDetailPage() {
                                             </div>
                                         </div>
                                     )}
-                                    
+
                                     {/* Issues List */}
                                     {dispute.ai_verdict.issues && dispute.ai_verdict.issues.length > 0 && (
                                         <div className="mt-4 pt-4 border-t border-purple-200">
@@ -254,7 +252,7 @@ export default function DisputeDetailPage() {
                                             </ul>
                                         </div>
                                     )}
-                                    
+
                                     {/* GPS Data */}
                                     {dispute.ai_verdict.gps_data && (
                                         <div className="mt-4 pt-4 border-t border-purple-200">
@@ -276,59 +274,65 @@ export default function DisputeDetailPage() {
             </div>
 
             {/* Photo Comparison */}
-            {((dispute.reference_photos && dispute.reference_photos.length > 0) || 
-              (dispute.proof_photos && dispute.proof_photos.length > 0)) && (
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Photo Comparison</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {dispute.reference_photos && dispute.reference_photos.length > 0 && (
-                            <div>
-                                <h3 className="text-sm font-medium text-gray-700 mb-2">Reference (Client)</h3>
-                                <img
-                                    src={dispute.reference_photos[0]}
-                                    alt="Reference"
-                                    className="w-full h-64 object-cover rounded-lg border border-gray-300"
-                                />
-                            </div>
-                        )}
-                        {dispute.proof_photos && dispute.proof_photos.length > 0 && (
-                            <div>
-                                <h3 className="text-sm font-medium text-gray-700 mb-2">Proof (Worker)</h3>
-                                <img
-                                    src={dispute.proof_photos[0]}
-                                    alt="Proof"
-                                    className="w-full h-64 object-cover rounded-lg border border-gray-300"
-                                />
-                            </div>
-                        )}
+            {((dispute.reference_photos && dispute.reference_photos.length > 0) ||
+                (dispute.proof_photos && dispute.proof_photos.length > 0)) && (
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Photo Comparison</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {dispute.reference_photos && dispute.reference_photos.length > 0 && (
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-700 mb-2">Reference (Client)</h3>
+                                    <img
+                                        src={dispute.reference_photos[0]}
+                                        alt="Reference"
+                                        className="w-full h-64 object-cover rounded-lg border border-gray-300"
+                                    />
+                                </div>
+                            )}
+                            {dispute.proof_photos && dispute.proof_photos.length > 0 && (
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-700 mb-2">Proof (Worker)</h3>
+                                    <img
+                                        src={dispute.proof_photos[0]}
+                                        alt="Proof"
+                                        className="w-full h-64 object-cover rounded-lg border border-gray-300"
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
             {/* Resolution Section */}
             {isResolved ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-6">
                     <h2 className="text-lg font-semibold text-green-900 mb-4">✅ Resolution</h2>
                     <div className="space-y-3">
-                        <InfoField 
-                            label="Resolved By" 
-                            value={shortenAddress(dispute.resolved_by || '')} 
+                        <InfoField
+                            label="Resolved By"
+                            value={shortenAddress(dispute.resolved_by || '')}
                         />
-                        <InfoField 
-                            label="Resolved At" 
-                            value={dispute.resolved_at ? new Date(dispute.resolved_at).toLocaleString() : 'N/A'} 
+                        <InfoField
+                            label="Resolved At"
+                            value={dispute.resolved_at ? new Date(dispute.resolved_at).toLocaleString() : 'N/A'}
                         />
-                        <InfoField 
-                            label="Outcome" 
-                            value={dispute.resolution === 'APPROVED' ? 'Worker Approved (95% payment)' : 'Client Refunded (100%)'} 
+                        <InfoField
+                            label="Outcome"
+                            value={
+                                dispute.resolution === 'APPROVED'
+                                    ? 'Worker Approved (95% payment)'
+                                    : dispute.resolution === 'DISMISSED'
+                                        ? 'Dismissed (Worker can retry)'
+                                        : 'Client Refunded (100%)'
+                            }
                         />
                         {dispute.resolution_notes && (
                             <InfoField label="Notes" value={dispute.resolution_notes} isLong />
                         )}
                         {dispute.transaction_hash && (
-                            <InfoField 
-                                label="Transaction Hash" 
-                                value={dispute.transaction_hash} 
+                            <InfoField
+                                label="Transaction Hash"
+                                value={dispute.transaction_hash}
                             />
                         )}
                     </div>
@@ -336,7 +340,7 @@ export default function DisputeDetailPage() {
             ) : (
                 <div className="bg-white rounded-lg shadow p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">⚖️ Resolve Dispute</h2>
-                    
+
                     {error && (
                         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
                             <p className="text-sm text-red-800">{error}</p>
@@ -374,7 +378,7 @@ export default function DisputeDetailPage() {
                                 {isResolving ? 'Processing...' : '💰 Refund Client'}
                             </button>
                         </div>
-                        
+
                         {/* Dismiss button for technical issues */}
                         <button
                             onClick={handleDismiss}

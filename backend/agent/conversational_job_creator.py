@@ -235,7 +235,7 @@ class ConversationalJobCreator:
                 context,
                 model=AgentConfig.TEXT_MODEL,
                 temperature=0.7,  # Slightly higher for natural conversation
-                max_tokens=500,
+                max_tokens=800,  # Increased to prevent JSON truncation
                 response_format=response_format
             )
             
