@@ -27,7 +27,7 @@ export default function TribunalDashboard() {
 
             if (data.success) {
                 const disputes = data.disputes as DisputeDict[];
-                
+
                 // Calculate stats
                 const pending = disputes.filter(d => d.status === 'PENDING').length;
                 const under_review = disputes.filter(d => d.status === 'UNDER_REVIEW').length;
@@ -102,7 +102,7 @@ export default function TribunalDashboard() {
                         View All →
                     </Link>
                 </div>
-                
+
                 {recentDisputes.length === 0 ? (
                     <div className="px-6 py-12 text-center text-gray-500">
                         <div className="text-4xl mb-2">🎉</div>
@@ -120,11 +120,10 @@ export default function TribunalDashboard() {
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-3 mb-2">
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                dispute.status === 'PENDING' 
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${dispute.status === 'PENDING'
                                                     ? 'bg-red-100 text-red-800'
                                                     : 'bg-yellow-100 text-yellow-800'
-                                            }`}>
+                                                }`}>
                                                 {dispute.status}
                                             </span>
                                             <span className="text-sm text-gray-500">
@@ -132,7 +131,7 @@ export default function TribunalDashboard() {
                                             </span>
                                         </div>
                                         <h3 className="text-sm font-medium text-gray-900 truncate mb-1">
-                                            {dispute.job_description || 'No description'}
+                                            {dispute.description || 'No description'}
                                         </h3>
                                         <p className="text-sm text-gray-600 line-clamp-2">
                                             {dispute.reason}

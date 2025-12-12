@@ -182,7 +182,7 @@ export default function DisputeDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InfoField label="Job ID" value={`#${dispute.job_id}`} />
                     <InfoField label="Amount" value={`${dispute.amount} GAS`} />
-                    <InfoField label="Job Description" value={dispute.job_description || 'N/A'} />
+                    <InfoField label="Job Description" value={dispute.description || 'N/A'} />
                     <InfoField label="Dispute Reason" value={dispute.reason || 'N/A'} />
                     <InfoField label="Client" value={shortenAddress(dispute.client_address || '')} />
                     <InfoField label="Worker" value={shortenAddress(dispute.worker_address || '')} />
@@ -206,8 +206,8 @@ export default function DisputeDetailPage() {
                                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-3">
                                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${dispute.ai_verdict.verified
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-red-100 text-red-800'
                                             }`}>
                                             {dispute.ai_verdict.verdict || (dispute.ai_verdict.verified ? 'APPROVED' : 'REJECTED')}
                                         </span>

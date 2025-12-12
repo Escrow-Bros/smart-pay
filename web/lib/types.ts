@@ -71,7 +71,7 @@ export interface DisputeDict {
     status: 'PENDING' | 'UNDER_REVIEW' | 'RESOLVED';
     resolved_by?: string | null;
     resolved_at?: string | null;
-    resolution?: 'APPROVED' | 'REFUNDED' | null;
+    resolution?: 'APPROVED' | 'REFUNDED' | 'DISMISSED' | null;
     resolution_notes?: string | null;
     transaction_hash?: string | null;
     // Job details (joined)

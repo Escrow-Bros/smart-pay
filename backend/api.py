@@ -786,7 +786,7 @@ async def get_worker_stats(worker_address: str):
             return {
                 "total_jobs": 0,
                 "completed_jobs": 0,
-                "total_earnings": 0
+                "total_earned": 0
             }
         
         stats = db.get_worker_stats(worker_address)
@@ -795,7 +795,7 @@ async def get_worker_stats(worker_address: str):
         return {
             "total_jobs": stats["total_jobs"],
             "completed_jobs": stats["completed_jobs"],
-            "total_earnings": stats["total_earnings"]
+            "total_earned": float(stats["total_earnings"])  # Frontend expects total_earned
         }
     except HTTPException:
         raise
@@ -804,7 +804,7 @@ async def get_worker_stats(worker_address: str):
         return {
             "total_jobs": 0,
             "completed_jobs": 0,
-            "total_earnings": 0
+            "total_earned": 0
         }
 
 
