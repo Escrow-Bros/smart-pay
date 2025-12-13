@@ -3,17 +3,16 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
-import { Scale, Clock, Search, CheckCircle2, AlertTriangle, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
+import { Scale, Clock, CheckCircle2, AlertTriangle, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
 interface DisputeStats {
     pending: number;
-    under_review: number;
     resolved: number;
     total: number;
 }
 
 export default function TribunalDashboard() {
-    const [stats, setStats] = useState<DisputeStats>({ pending: 0, under_review: 0, resolved: 0, total: 0 });
+    const [stats, setStats] = useState<DisputeStats>({ pending: 0, resolved: 0, total: 0 });
     const [recentDisputes, setRecentDisputes] = useState<DisputeDict[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -30,11 +29,11 @@ export default function TribunalDashboard() {
             if (data.success) {
                 const disputes = data.disputes as DisputeDict[];
 
-                const pending = disputes.filter(d => d.status === 'PENDING').length;
-                const under_review = disputes.filter(d => d.status === 'UNDER_REVIEW').length;
+                // Pending = anything not resolved
+                const pending = disputes.filter(d => d.status !== 'RESOLVED').length;
                 const resolved = disputes.filter(d => d.status === 'RESOLVED').length;
 
-                setStats({ pending, under_review, resolved, total: disputes.length });
+                setStats({ pending, resolved, total: disputes.length });
 
                 const unresolved = disputes
                     .filter(d => d.status !== 'RESOLVED')
@@ -81,19 +80,13 @@ export default function TribunalDashboard() {
                 </button>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Stats Cards - Only 3 now: Pending, Resolved, Total */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard
-                    title="Pending Review"
+                    title="Pending"
                     value={stats.pending}
-                    color="red"
-                    icon={<Clock className="w-6 h-6" />}
-                />
-                <StatCard
-                    title="Under Review"
-                    value={stats.under_review}
                     color="yellow"
-                    icon={<Search className="w-6 h-6" />}
+                    icon={<Clock className="w-6 h-6" />}
                 />
                 <StatCard
                     title="Resolved"
@@ -114,7 +107,7 @@ export default function TribunalDashboard() {
                 <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                        <h2 className="text-lg font-semibold text-white">Recent Unresolved Disputes</h2>
+                        <h2 className="text-lg font-semibold text-white">Pending Disputes</h2>
                     </div>
                     <Link
                         href="/tribunal/disputes"
@@ -144,16 +137,9 @@ export default function TribunalDashboard() {
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-3 mb-2">
-                                            <span className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${dispute.status === 'PENDING'
-                                                    ? 'bg-red-500/20 text-red-400'
-                                                    : 'bg-yellow-500/20 text-yellow-400'
-                                                }`}>
-                                                {dispute.status === 'PENDING' ? (
-                                                    <Clock className="w-3 h-3" />
-                                                ) : (
-                                                    <Search className="w-3 h-3" />
-                                                )}
-                                                {dispute.status}
+                                            <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-400">
+                                                <Clock className="w-3 h-3" />
+                                                PENDING
                                             </span>
                                             <span className="text-sm text-slate-500">Job #{dispute.job_id}</span>
                                             <span className="text-xs text-slate-600">• {dispute.amount} GAS</span>
@@ -178,32 +164,22 @@ export default function TribunalDashboard() {
                 )}
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions - Only 2 now */}
             <div className="glass border border-purple-500/30 rounded-2xl p-6 bg-gradient-to-r from-purple-500/5 to-transparent">
                 <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                     <Scale className="w-4 h-4 text-purple-400" />
                     Quick Actions
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Link
                         href="/tribunal/disputes?status=PENDING"
-                        className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-red-500/10 border border-slate-700 hover:border-red-500/50 transition-all group"
-                    >
-                        <div className="flex items-center gap-3">
-                            <Clock className="w-5 h-5 text-red-400" />
-                            <span className="text-sm text-slate-300">Review Pending</span>
-                        </div>
-                        <span className="text-lg font-bold text-red-400">{stats.pending}</span>
-                    </Link>
-                    <Link
-                        href="/tribunal/disputes?status=UNDER_REVIEW"
                         className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-yellow-500/10 border border-slate-700 hover:border-yellow-500/50 transition-all group"
                     >
                         <div className="flex items-center gap-3">
-                            <Search className="w-5 h-5 text-yellow-400" />
-                            <span className="text-sm text-slate-300">Continue Reviews</span>
+                            <Clock className="w-5 h-5 text-yellow-400" />
+                            <span className="text-sm text-slate-300">Review Pending</span>
                         </div>
-                        <span className="text-lg font-bold text-yellow-400">{stats.under_review}</span>
+                        <span className="text-lg font-bold text-yellow-400">{stats.pending}</span>
                     </Link>
                     <Link
                         href="/tribunal/disputes?status=RESOLVED"
@@ -223,7 +199,6 @@ export default function TribunalDashboard() {
 
 function StatCard({ title, value, color, icon }: { title: string; value: number; color: string; icon: React.ReactNode }) {
     const colorClasses: Record<string, string> = {
-        red: 'from-red-500/10 to-transparent border-red-500/30 text-red-400',
         yellow: 'from-yellow-500/10 to-transparent border-yellow-500/30 text-yellow-400',
         green: 'from-green-500/10 to-transparent border-green-500/30 text-green-400',
         purple: 'from-purple-500/10 to-transparent border-purple-500/30 text-purple-400',

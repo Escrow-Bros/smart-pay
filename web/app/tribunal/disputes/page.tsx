@@ -1,21 +1,30 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
-import { Search, Clock, Eye, CheckCircle2, ChevronRight, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import { Search, Clock, CheckCircle2, ChevronRight, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 
 function DisputesContent() {
     const searchParams = useSearchParams();
-    const statusFilter = searchParams.get('status') || 'all';
+    const router = useRouter();
+
+    // Get status from URL and normalize to lowercase
+    const urlStatus = (searchParams.get('status') || 'all').toLowerCase();
 
     const [disputes, setDisputes] = useState<DisputeDict[]>([]);
     const [filteredDisputes, setFilteredDisputes] = useState<DisputeDict[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeFilter, setActiveFilter] = useState<string>(statusFilter);
+    const [activeFilter, setActiveFilter] = useState<string>(urlStatus);
+
+    // Sync activeFilter with URL changes
+    useEffect(() => {
+        const newStatus = (searchParams.get('status') || 'all').toLowerCase();
+        setActiveFilter(newStatus);
+    }, [searchParams]);
 
     useEffect(() => {
         fetchDisputes();
@@ -56,9 +65,13 @@ function DisputesContent() {
     const applyFilters = () => {
         let filtered = [...disputes];
 
-        if (activeFilter !== 'all') {
-            filtered = filtered.filter(d => d.status === activeFilter.toUpperCase());
+        // Filter by status - PENDING means anything not RESOLVED
+        if (activeFilter === 'pending') {
+            filtered = filtered.filter(d => d.status !== 'RESOLVED');
+        } else if (activeFilter === 'resolved') {
+            filtered = filtered.filter(d => d.status === 'RESOLVED');
         }
+        // 'all' shows everything
 
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
@@ -74,6 +87,20 @@ function DisputesContent() {
 
         setFilteredDisputes(filtered);
     };
+
+    const handleFilterChange = (filter: string) => {
+        setActiveFilter(filter);
+        // Update URL to match
+        if (filter === 'all') {
+            router.push('/tribunal/disputes');
+        } else {
+            router.push(`/tribunal/disputes?status=${filter.toUpperCase()}`);
+        }
+    };
+
+    // Count pending (anything not resolved)
+    const pendingCount = disputes.filter(d => d.status !== 'RESOLVED').length;
+    const resolvedCount = disputes.filter(d => d.status === 'RESOLVED').length;
 
     if (isLoading) {
         return (
@@ -123,33 +150,26 @@ function DisputesContent() {
                         />
                     </div>
 
-                    {/* Status Filters */}
+                    {/* Status Filters - Only All, Pending, Resolved */}
                     <div className="flex gap-2 flex-wrap">
                         <FilterButton
                             label="All"
                             count={disputes.length}
                             isActive={activeFilter === 'all'}
-                            onClick={() => setActiveFilter('all')}
+                            onClick={() => handleFilterChange('all')}
                         />
                         <FilterButton
                             label="Pending"
-                            count={disputes.filter(d => d.status === 'PENDING').length}
+                            count={pendingCount}
                             isActive={activeFilter === 'pending'}
-                            onClick={() => setActiveFilter('pending')}
-                            color="red"
-                        />
-                        <FilterButton
-                            label="Under Review"
-                            count={disputes.filter(d => d.status === 'UNDER_REVIEW').length}
-                            isActive={activeFilter === 'under_review'}
-                            onClick={() => setActiveFilter('under_review')}
+                            onClick={() => handleFilterChange('pending')}
                             color="yellow"
                         />
                         <FilterButton
                             label="Resolved"
-                            count={disputes.filter(d => d.status === 'RESOLVED').length}
+                            count={resolvedCount}
                             isActive={activeFilter === 'resolved'}
-                            onClick={() => setActiveFilter('resolved')}
+                            onClick={() => handleFilterChange('resolved')}
                             color="green"
                         />
                     </div>
@@ -223,7 +243,6 @@ function FilterButton({
 }) {
     const colorClasses: Record<string, string> = {
         gray: isActive ? 'bg-slate-600 text-white border-slate-500' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-slate-600',
-        red: isActive ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-red-500/50 hover:text-red-400',
         yellow: isActive ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-yellow-500/50 hover:text-yellow-400',
         green: isActive ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-green-500/50 hover:text-green-400',
     };
@@ -239,18 +258,15 @@ function FilterButton({
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const config: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-        PENDING: { bg: 'bg-red-500/20', text: 'text-red-400', icon: <Clock className="w-3 h-3" /> },
-        UNDER_REVIEW: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: <Eye className="w-3 h-3" /> },
-        RESOLVED: { bg: 'bg-green-500/20', text: 'text-green-400', icon: <CheckCircle2 className="w-3 h-3" /> },
-    };
-
-    const { bg, text, icon } = config[status] || { bg: 'bg-slate-700', text: 'text-slate-400', icon: null };
+    const isResolved = status === 'RESOLVED';
 
     return (
-        <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${bg} ${text}`}>
-            {icon}
-            {status.replace('_', ' ')}
+        <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${isResolved
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-yellow-500/20 text-yellow-400'
+            }`}>
+            {isResolved ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+            {isResolved ? 'RESOLVED' : 'PENDING'}
         </span>
     );
 }
