@@ -304,7 +304,3 @@ html {
 .animate-bounce-subtle {
   animation: bounce-subtle 2s ease-in-out infinite;
 }
-
-.animate-spin-slow {
-  animation: spin-slow 3s linear infinite;
-}

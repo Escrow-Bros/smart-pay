@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
 
 interface PhotoLightboxProps {
@@ -11,6 +11,7 @@ interface PhotoLightboxProps {
 
 export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLightboxProps) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+    const modalRef = useRef<HTMLDivElement>(null);
 
     if (!photos || photos.length === 0) {
         return (
@@ -36,11 +37,18 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
     };
 
     // Handle keyboard navigation
-    const handleKeyDown = (e: React.KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'Escape') closeLightbox();
         if (e.key === 'ArrowRight') goNext();
         if (e.key === 'ArrowLeft') goPrev();
     };
+
+    // Focus modal when opened
+    useEffect(() => {
+        if (selectedIndex !== null && modalRef.current) {
+            modalRef.current.focus();
+        }
+    }, [selectedIndex]);
 
     const gridCols = {
         2: 'grid-cols-2',
@@ -85,10 +93,14 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
             {/* Lightbox Modal */}
             {selectedIndex !== null && (
                 <div
+                    ref={modalRef}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Photo lightbox"
                     className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200"
                     onClick={closeLightbox}
                     onKeyDown={handleKeyDown}
-                    tabIndex={0}
+                    tabIndex={-1}
                 >
                     {/* Close button */}
                     <button
@@ -141,8 +153,8 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
                                     key={index}
                                     onClick={(e) => { e.stopPropagation(); setSelectedIndex(index); }}
                                     className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${index === selectedIndex
-                                            ? 'border-cyan-500 scale-110'
-                                            : 'border-transparent opacity-60 hover:opacity-100'
+                                        ? 'border-cyan-500 scale-110'
+                                        : 'border-transparent opacity-60 hover:opacity-100'
                                         }`}
                                 >
                                     <img

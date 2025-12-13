@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
@@ -9,7 +10,7 @@ export default function ClientJobsPage() {
     const { state } = useApp();
 
     const getStatusConfig = (status: string) => {
-        const configs: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+        const configs: Record<string, { bg: string; text: string; icon: ReactNode }> = {
             'OPEN': { bg: 'bg-green-500/20', text: 'text-green-400', icon: <Clock className="w-3 h-3" /> },
             'LOCKED': { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: <Lock className="w-3 h-3" /> },
             'COMPLETED': { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: <CheckCircle2 className="w-3 h-3" /> },
