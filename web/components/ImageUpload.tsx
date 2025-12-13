@@ -3,24 +3,60 @@
 import { useState } from 'react';
 import { UploadedImage } from '@/lib/types';
 import toast from 'react-hot-toast';
-import { ImagePlus, X, Image } from 'lucide-react';
+import { ImagePlus, X, Image, AlertCircle } from 'lucide-react';
 
 interface ImageUploadProps {
     images: UploadedImage[];
     onAdd: (image: UploadedImage) => void;
     onRemove: (index: number) => void;
+    maxImages?: number;
+    label?: string;
 }
 
-export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProps) {
+export default function ImageUpload({
+    images,
+    onAdd,
+    onRemove,
+    maxImages = 4,
+    label = "Reference Photos"
+}: ImageUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
 
+    const remainingSlots = maxImages - images.length;
+    const isAtLimit = remainingSlots <= 0;
+
+    // Check for duplicate by filename + file size
+    const isDuplicate = (file: File): boolean => {
+        return images.some(img =>
+            img.file.name === file.name && img.file.size === file.size
+        );
+    };
+
     const processFiles = (files: FileList) => {
+        let added = 0;
+        let skippedDuplicate = 0;
+        let skippedLimit = 0;
+
         Array.from(files).forEach((file) => {
             // Check file type
             if (!file.type.startsWith('image/')) {
                 toast.error(`"${file.name}" is not an image file.`);
                 return;
             }
+
+            // Check for duplicates
+            if (isDuplicate(file)) {
+                skippedDuplicate++;
+                return;
+            }
+
+            // Check limit
+            if (images.length + added >= maxImages) {
+                skippedLimit++;
+                return;
+            }
+
+            added++;
 
             // Read and optimize ALL images
             const reader = new FileReader();
@@ -57,11 +93,9 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     canvas.toBlob(
                         (blob) => {
                             if (!blob) {
-                                // Blob creation failed, try fallback with toDataURL
                                 console.error(`Failed to create blob for "${file.name}". Attempting fallback...`);
 
                                 try {
-                                    // Fallback: convert data URL to Blob
                                     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
                                     const response = fetch(dataUrl);
                                     response.then(res => res.blob()).then(fallbackBlob => {
@@ -73,34 +107,22 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                                                 file: optimizedFile,
                                                 preview: dataUrl,
                                             });
-                                            console.log(`✅ Processed ${file.name} using fallback method`);
                                         } else {
                                             throw new Error('Fallback blob creation failed');
                                         }
                                     }).catch(() => {
-                                        // Both methods failed
-                                        console.error(`Failed to process "${file.name}" - blob conversion failed.`);
-                                        toast.error(`Failed to process "${file.name}". The image may be too large or in an unsupported format.`);
+                                        toast.error(`Failed to process "${file.name}".`);
                                     });
                                 } catch (error) {
-                                    console.error(`Error processing "${file.name}":`, error);
                                     toast.error(`Failed to process "${file.name}". Please try again.`);
                                 }
-                                return; // Terminate processing
+                                return;
                             }
 
-                            // Success: blob created normally
                             const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
                                 type: 'image/jpeg',
                             });
                             const preview = canvas.toDataURL('image/jpeg', 0.85);
-
-                            // Show size reduction if significant
-                            const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                            const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-                            if (file.size > blob.size * 1.5) {
-                                console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
-                            }
 
                             onAdd({
                                 file: optimizedFile,
@@ -112,17 +134,23 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     );
                 };
                 img.onerror = () => {
-                    console.error(`Failed to load image: "${file.name}". The file may be corrupted or in an unsupported format.`);
-                    toast.error(`Failed to load "${file.name}". The image may be corrupted or in an unsupported format.`);
+                    toast.error(`Failed to load "${file.name}". The image may be corrupted.`);
                 };
                 img.src = reader.result as string;
             };
             reader.onerror = () => {
-                console.error(`Failed to read file: "${file.name}".`);
                 toast.error(`Failed to read "${file.name}". Please try again.`);
             };
             reader.readAsDataURL(file);
         });
+
+        // Show feedback for skipped files
+        if (skippedDuplicate > 0) {
+            toast.error(`${skippedDuplicate} duplicate image(s) skipped.`, { icon: '🔄' });
+        }
+        if (skippedLimit > 0) {
+            toast.error(`${skippedLimit} image(s) skipped. Maximum ${maxImages} images allowed.`, { icon: '📷' });
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,77 +166,113 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        processFiles(e.dataTransfer.files);
+        if (!isAtLimit) {
+            processFiles(e.dataTransfer.files);
+        }
     };
 
     return (
         <div className="w-full">
-            <label className="block text-sm sm:text-base font-medium text-slate-300 mb-3 text-center">
-                Reference Photos
-            </label>
+            {/* Header with label and count */}
+            <div className="flex items-center justify-between mb-3">
+                <label className="text-sm sm:text-base font-medium text-slate-300">
+                    {label}
+                </label>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isAtLimit
+                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                        : 'bg-slate-800/50 text-slate-400 border border-slate-700'
+                    }`}>
+                    <Image className="w-3.5 h-3.5" />
+                    {images.length}/{maxImages}
+                </div>
+            </div>
 
+            {/* Drop zone */}
             <div
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragOver={(e) => { e.preventDefault(); if (!isAtLimit) setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl sm:rounded-2xl p-6 sm:p-8 md:p-10 transition-all cursor-pointer ${isDragging
-                    ? 'border-cyan-500 bg-cyan-500/5'
-                    : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50'
+                className={`border-2 border-dashed rounded-xl sm:rounded-2xl p-6 sm:p-8 transition-all ${isAtLimit
+                        ? 'border-slate-700 bg-slate-900/30 cursor-not-allowed opacity-60'
+                        : isDragging
+                            ? 'border-cyan-500 bg-cyan-500/5 cursor-pointer'
+                            : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50 cursor-pointer'
                     }`}
             >
-                <label className="flex flex-col items-center justify-center cursor-pointer">
+                <label className={`flex flex-col items-center justify-center ${isAtLimit ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                     <input
                         type="file"
                         accept="image/*"
                         multiple
                         onChange={handleFileChange}
                         className="hidden"
+                        disabled={isAtLimit}
                     />
-                    <div className={`p-4 rounded-full mb-4 transition-colors ${isDragging ? 'bg-cyan-500/20' : 'bg-slate-800'}`}>
-                        <ImagePlus className={`h-8 w-8 sm:h-10 sm:w-10 ${isDragging ? 'text-cyan-400' : 'text-slate-500'}`} />
+                    <div className={`p-4 rounded-full mb-4 transition-colors ${isAtLimit
+                            ? 'bg-slate-800/50'
+                            : isDragging ? 'bg-cyan-500/20' : 'bg-slate-800'
+                        }`}>
+                        {isAtLimit ? (
+                            <AlertCircle className="h-8 w-8 sm:h-10 sm:w-10 text-yellow-500" />
+                        ) : (
+                            <ImagePlus className={`h-8 w-8 sm:h-10 sm:w-10 ${isDragging ? 'text-cyan-400' : 'text-slate-500'}`} />
+                        )}
                     </div>
-                    <p className="text-slate-400 text-sm sm:text-base text-center mb-2">
-                        Drop reference images here or click to select
-                    </p>
-                    <p className="text-slate-600 text-xs text-center">
-                        Auto-optimized for AI verification
-                    </p>
+                    {isAtLimit ? (
+                        <>
+                            <p className="text-yellow-400 text-sm sm:text-base text-center mb-1 font-medium">
+                                Maximum {maxImages} images reached
+                            </p>
+                            <p className="text-slate-500 text-xs text-center">
+                                Remove an image to add more
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-slate-400 text-sm sm:text-base text-center mb-1">
+                                Drop images here or click to select
+                            </p>
+                            <p className="text-slate-600 text-xs text-center">
+                                {remainingSlots} slot{remainingSlots !== 1 ? 's' : ''} remaining • Auto-optimized for AI
+                            </p>
+                        </>
+                    )}
                 </label>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 mt-3 text-center">
-                Images auto-resized to 1600px & compressed for optimal AI processing
-            </p>
 
+            {/* Uploaded images grid */}
             {images.length > 0 && (
                 <div className="mt-4">
-                    <p className="text-sm font-medium text-slate-300 mb-3 text-center flex items-center justify-center gap-2">
-                        <Image className="w-4 h-4 text-green-400" />
-                        Uploaded ({images.length})
-                    </p>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {images.map((img, index) => (
                             <div
                                 key={index}
-                                className="flex items-center p-2.5 sm:p-3 glass border border-slate-700 rounded-xl hover:border-slate-600 transition-colors group"
+                                className="relative group aspect-square rounded-xl overflow-hidden border border-slate-700 hover:border-cyan-500/50 transition-colors"
                             >
                                 <img
                                     src={img.preview}
-                                    alt="Preview"
-                                    className="h-12 w-12 sm:h-14 sm:w-14 object-cover rounded-lg mr-3 flex-shrink-0"
+                                    alt={`Image ${index + 1}`}
+                                    className="w-full h-full object-cover"
                                 />
-                                <span className="text-slate-300 text-xs sm:text-sm flex-1 truncate min-w-0">
-                                    {img.file.name}
-                                </span>
-                                <span className="text-slate-500 text-xs mr-2">
-                                    {(img.file.size / 1024).toFixed(0)}KB
-                                </span>
+                                {/* Overlay with file info */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="absolute bottom-2 left-2 right-2">
+                                        <p className="text-white text-xs truncate">{img.file.name}</p>
+                                        <p className="text-slate-400 text-xs">{(img.file.size / 1024).toFixed(0)}KB</p>
+                                    </div>
+                                </div>
+                                {/* Remove button */}
                                 <button
                                     onClick={() => onRemove(index)}
-                                    className="p-2 hover:bg-red-500/20 rounded-lg transition-colors flex-shrink-0 min-h-[36px] min-w-[36px] touch-manipulation flex items-center justify-center opacity-60 group-hover:opacity-100"
+                                    className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                     aria-label="Remove image"
                                 >
-                                    <X className="h-4 w-4 text-red-400 hover:text-red-300" />
+                                    <X className="h-4 w-4 text-white" />
                                 </button>
+                                {/* Image number badge */}
+                                <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-xs text-white font-medium">
+                                    {index + 1}
+                                </div>
                             </div>
                         ))}
                     </div>

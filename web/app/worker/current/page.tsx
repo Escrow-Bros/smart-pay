@@ -640,6 +640,8 @@ export default function WorkerCurrentJobPage() {
                                     images={proofImages}
                                     onAdd={handleAddImage}
                                     onRemove={handleRemoveImage}
+                                    maxImages={4}
+                                    label="Proof Photos"
                                 />
 
                                 <button

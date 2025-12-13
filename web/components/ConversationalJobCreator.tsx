@@ -404,8 +404,8 @@ export default function ConversationalJobCreator() {
           {steps.map((step, idx) => (
             <div key={step.id} className="flex items-center gap-2">
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${step.complete
-                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                  : 'bg-slate-800/50 text-slate-500 border border-slate-700'
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-slate-800/50 text-slate-500 border border-slate-700'
                 }`}>
                 {step.complete ? (
                   <CheckCircle2 className="w-3.5 h-3.5" />
@@ -526,6 +526,8 @@ export default function ConversationalJobCreator() {
                 images={state.clientUploadedImages}
                 onAdd={handleImageUpload}
                 onRemove={removeUploadedImage}
+                maxImages={4}
+                label="Reference Photos"
               />
 
               <LocationPicker

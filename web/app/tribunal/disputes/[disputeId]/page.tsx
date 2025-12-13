@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Scale, CheckCircle2, XCircle, AlertTriangle, Clock, MapPin, User, Wallet, Image, Loader2, ExternalLink } from 'lucide-react';
+import PhotoLightbox from '@/components/PhotoLightbox';
 
 export default function DisputeDetailPage() {
     const params = useParams();
@@ -204,8 +205,8 @@ export default function DisputeDetailPage() {
                     </h2>
                     <div className="flex items-center justify-between mb-4">
                         <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${dispute.ai_verdict.verified
-                                ? 'bg-green-500/20 text-green-400'
-                                : 'bg-red-500/20 text-red-400'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
                             }`}>
                             {dispute.ai_verdict.verified ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                             {dispute.ai_verdict.verdict || (dispute.ai_verdict.verified ? 'APPROVED' : 'REJECTED')}
@@ -259,26 +260,27 @@ export default function DisputeDetailPage() {
                     <div className="glass border border-slate-800 rounded-2xl p-6">
                         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                             <Image className="w-5 h-5 text-purple-400" />
-                            Photo Comparison
+                            Photo Evidence
+                            <span className="text-xs text-slate-500 font-normal">
+                                (Click to enlarge)
+                            </span>
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {dispute.reference_photos && dispute.reference_photos.length > 0 && (
                                 <div>
-                                    <h3 className="text-sm font-medium text-cyan-400 mb-3">📋 Reference (Client)</h3>
-                                    <img
-                                        src={dispute.reference_photos[0]}
-                                        alt="Reference"
-                                        className="w-full h-64 object-cover rounded-xl border border-cyan-500/30"
+                                    <PhotoLightbox
+                                        photos={dispute.reference_photos}
+                                        title="📋 Reference Photos (Client)"
+                                        columns={2}
                                     />
                                 </div>
                             )}
                             {dispute.proof_photos && dispute.proof_photos.length > 0 && (
                                 <div>
-                                    <h3 className="text-sm font-medium text-green-400 mb-3">✅ Proof (Worker)</h3>
-                                    <img
-                                        src={dispute.proof_photos[0]}
-                                        alt="Proof"
-                                        className="w-full h-64 object-cover rounded-xl border border-green-500/30"
+                                    <PhotoLightbox
+                                        photos={dispute.proof_photos}
+                                        title="✅ Proof Photos (Worker)"
+                                        columns={2}
                                     />
                                 </div>
                             )}
@@ -419,8 +421,8 @@ function StatusBadge({ status }: { status: string }) {
 
     return (
         <span className={`flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full ${isPending
-                ? 'bg-yellow-500/20 text-yellow-400'
-                : 'bg-green-500/20 text-green-400'
+            ? 'bg-yellow-500/20 text-yellow-400'
+            : 'bg-green-500/20 text-green-400'
             }`}>
             {isPending ? <Clock className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
             {isPending ? 'PENDING' : 'RESOLVED'}
