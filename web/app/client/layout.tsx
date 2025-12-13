@@ -33,7 +33,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return (
         <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row">
             {/* Mobile Header */}
-            <div className="md:hidden bg-slate-900/50 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-50">
+            <div className="md:hidden bg-slate-900/50 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-40">
                 <Link href="/" className="text-xl font-bold text-white flex items-center gap-2">
                     <Gem className="w-5 h-5 text-cyan-400" />
                     GigSmartPay
@@ -53,15 +53,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
             {/* Mobile Overlay */}
             {isMobileMenuOpen && (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-30 md:hidden"
+                <div
+                    className="fixed inset-0 bg-black/50 z-50 md:hidden"
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
 
             {/* Sidebar - Desktop always visible, Mobile toggleable */}
             <div className={`
-                fixed md:static inset-0 z-40 md:z-auto
+                fixed md:static inset-0 z-[60] md:z-auto
                 transform transition-transform duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 w-64 md:w-64 bg-slate-900/95 md:bg-slate-900/50 md:border-r border-slate-800 flex flex-col
