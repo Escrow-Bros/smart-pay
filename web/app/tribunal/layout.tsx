@@ -66,7 +66,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
                 fixed top-0 right-0 z-[60] md:hidden
                 transform transition-transform duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
-                w-64 bg-slate-900 border-l border-slate-800 h-screen
+                w-64 bg-slate-900 border-l border-slate-800 h-[100dvh] flex flex-col
             `}>
                 <div className="p-6 border-b border-slate-800">
                     <div className="flex items-center gap-2 mb-2">
@@ -77,7 +77,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
                         ADMIN
                     </span>
                 </div>
-                <div className="p-4 space-y-2">
+                <div className="p-4 space-y-2 flex-1 overflow-y-auto">
                     {navItems.map((item) => {
                         const isActive = item.exact
                             ? pathname === item.href
