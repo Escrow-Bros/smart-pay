@@ -43,7 +43,7 @@ export default function ChatInput({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg sm:rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm max-h-32 touch-manipulation"
+        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg sm:rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed transition-all text-base sm:text-sm max-h-32 touch-manipulation"
         style={{
           minHeight: '44px',
           height: 'auto',

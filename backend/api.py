@@ -446,7 +446,8 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
                     "job_id": job_id,
                     "status": "COMPLETED",
                     "message": "Payment confirmed! Job completed successfully.",
-                    "tx_hash": tx_hash
+                    "tx_hash": tx_hash,
+                    "amount": job.get("amount")
                 }
                 
                 if job.get("worker_address"):
@@ -867,7 +868,8 @@ async def verify_payment_status(job_id: int):
                         "job_id": job_id,
                         "status": "COMPLETED",
                         "message": "Payment confirmed! Job completed successfully.",
-                        "tx_hash": job.get("tx_hash")
+                        "tx_hash": job.get("tx_hash"),
+                        "amount": job.get("amount")
                     }
                 )
             
@@ -1949,6 +1951,23 @@ async def resolve_dispute(request: DisputeResolve):
             resolved_by=arbiter_address,
             resolution_notes=request.resolution_notes
         )
+        
+        # Broadcast resolution to worker and client
+        resolution_message = {
+            "type": "DISPUTE_RESOLVED",
+            "job_id": request.job_id,
+            "status": "COMPLETED" if resolution == "worker_won" else "CANCELLED",
+            "message": f"Dispute resolved: {resolution}. {request.resolution_notes}",
+            "resolution": resolution,
+            "tx_hash": blockchain_result.get("tx_hash")
+        }
+        
+        job = db.get_job(request.job_id)
+        if job:
+            if job.get("worker_address"):
+                await websocket_manager.broadcast_to_client(job["worker_address"], resolution_message)
+            if job.get("client_address"):
+                await websocket_manager.broadcast_to_client(job["client_address"], resolution_message)
         
         return {
             "success": True,

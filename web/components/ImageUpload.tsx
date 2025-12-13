@@ -319,7 +319,8 @@ export default function ImageUpload({
     return (
         <div className="w-full">
             {/* Header with label and count */}
-            <div className="flex items-center justify-between mb-3">
+            {/* Header with label and count */}
+            <div className="flex flex-col items-center gap-2 mb-4">
                 <label className="text-sm sm:text-base font-medium text-slate-300">
                     {label}
                 </label>
@@ -332,10 +333,10 @@ export default function ImageUpload({
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            <div className="flex flex-wrap justify-center gap-4">
                 {/* Upload Button */}
                 {!isAtLimit && (
-                    <div className="relative group aspect-square">
+                    <div className="relative group aspect-square w-32 sm:w-40">
                         <input
                             type="file"
                             accept="image/*"
@@ -389,7 +390,7 @@ export default function ImageUpload({
                 {!isAtLimit && (
                     <button
                         onClick={startCamera}
-                        className="relative group aspect-square rounded-2xl border-2 border-dashed border-slate-700 bg-slate-800/30 hover:border-purple-500/50 hover:bg-slate-800/50 transition-all duration-300 flex flex-col items-center justify-center gap-3"
+                        className="relative group aspect-square w-32 sm:w-40 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-800/30 hover:border-purple-500/50 hover:bg-slate-800/50 transition-all duration-300 flex flex-col items-center justify-center gap-3"
                     >
                         <div className="p-3 bg-slate-800 rounded-full group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-black/20">
                             <Camera className="w-6 h-6 text-purple-400" />
@@ -404,7 +405,7 @@ export default function ImageUpload({
                 {images.map((img, index) => (
                     <div
                         key={`${img.file.name}-${index}`}
-                        className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-800 border border-slate-700 shadow-lg animate-in zoom-in duration-300"
+                        className="group relative aspect-square w-32 sm:w-40 rounded-2xl overflow-hidden bg-slate-800 border border-slate-700 shadow-lg animate-in zoom-in duration-300"
                     >
                         <img
                             src={img.preview}
@@ -482,7 +483,7 @@ export default function ImageUpload({
             }
 
             {/* Helper Text */}
-            <div className="flex items-start gap-2 text-xs text-slate-500 px-1">
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-500 px-1 mt-4 text-center">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 text-slate-600" />
                 <p>
                     Supported formats: JPG, PNG. Max size: 5MB.

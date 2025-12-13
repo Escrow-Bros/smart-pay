@@ -345,8 +345,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reconnectAttemptsRef.current = 0;  // Reset failure count for new wallet
         connectWebSocket();
 
+        // Handle visibility change (reconnect when app comes to foreground)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ App became visible, checking WebSocket connection...');
+                // If disconnected, force immediate reconnect
+                if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED || wsRef.current.readyState === WebSocket.CLOSING) {
+                    console.log('🔄 WebSocket disconnected, forcing immediate reconnect...');
+                    reconnectAttemptsRef.current = 0; // Reset attempts
+                    if (reconnectTimeoutRef.current) {
+                        clearTimeout(reconnectTimeoutRef.current);
+                    }
+                    connectWebSocket();
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         // Cleanup on unmount or wallet change
         return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             isIntentionalClose.current = true;
 
             if (reconnectTimeoutRef.current) {

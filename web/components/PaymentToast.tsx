@@ -63,7 +63,7 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
                             {/* Amount */}
                             <div className="flex items-baseline gap-2">
                                 <span className={`text-2xl font-bold ${isProcessing ? 'text-yellow-400' : 'text-green-400'}`}>
-                                    {gasAmount} GAS
+                                    {gasAmount || '0.00'} GAS
                                 </span>
                                 {usdAmount && (
                                     <span className="text-sm text-slate-400">
