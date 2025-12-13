@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { UploadedImage } from '@/lib/types';
 import toast from 'react-hot-toast';
 import { ImagePlus, X, Image, AlertCircle, Camera } from 'lucide-react';
@@ -27,6 +27,29 @@ export default function ImageUpload({
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+
+    // Cleanup stream on unmount
+    useEffect(() => {
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, []);
+
+    // Handle escape key to close camera
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isCameraOpen) {
+                stopCamera();
+            }
+        };
+
+        if (isCameraOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [isCameraOpen]);
 
     const remainingSlots = maxImages - images.length;
     const isAtLimit = remainingSlots <= 0;
@@ -57,6 +80,12 @@ export default function ImageUpload({
             // Check file type
             if (!file.type.startsWith('image/')) {
                 toast.error(`"${file.name}" is not an image file.`);
+                return;
+            }
+
+            // Check file size (5MB limit)
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error(`"${file.name}" exceeds the 5MB size limit.`);
                 return;
             }
 
@@ -181,6 +210,19 @@ export default function ImageUpload({
 
     const capturePhoto = () => {
         if (!videoRef.current) return;
+
+        // Check if at limit
+        if (images.length + pendingCountRef.current >= maxImages) {
+            toast.error(`Maximum ${maxImages} images allowed.`);
+            stopCamera();
+            return;
+        }
+
+        // Validate video is ready
+        if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+            toast.error("Camera not ready. Please try again.");
+            return;
+        }
 
         const canvas = document.createElement('canvas');
         canvas.width = videoRef.current.videoWidth;
@@ -324,7 +366,12 @@ export default function ImageUpload({
             {/* Camera Modal */}
             {
                 isCameraOpen && (
-                    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+                    <div
+                        className="fixed inset-0 z-50 bg-black flex flex-col"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Camera capture"
+                    >
                         <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
                             <video
                                 ref={videoRef}
