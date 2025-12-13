@@ -260,9 +260,9 @@ export default function Home() {
             <span>IPFS Storage</span>
             <span>GPT-4o Vision</span>
           </div>
-          <p className="text-slate-600">
-            Built with ❤️ for trustless gig economy
-          </p>
+          <footer className="w-full text-center py-8 text-slate-500 text-sm mt-auto">
+            &copy; {new Date().getFullYear()} GigSmartPay. All rights reserved.
+          </footer>
         </div>
       </div>
     </div>
