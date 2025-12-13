@@ -1,10 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
-import { useState, useMemo } from 'react';
 import { Briefcase, CheckCircle2, Clock, AlertTriangle, RotateCcw, MapPin, Image, ExternalLink, Loader2 } from 'lucide-react';
+import type { JobDict } from '@/lib/types';
+import VerificationModal from '@/components/VerificationModal';
+import { getVerificationStatus } from '@/lib/verification';
 
 type FilterStatus = 'ALL' | 'COMPLETED' | 'PAYMENT_PENDING' | 'DISPUTED' | 'REFUNDED';
 
@@ -24,22 +27,34 @@ const formatDate = (dateStr: string | undefined): string => {
 export default function WorkerHistoryPage() {
     const { state } = useApp();
     const [filter, setFilter] = useState<FilterStatus>('ALL');
+    const [selectedJobForVerification, setSelectedJobForVerification] = useState<JobDict | null>(null);
 
-    // Memoize sorted jobs to prevent unnecessary recalculation
-    const sortedJobs = useMemo(() => {
+    // Filter jobs first
+    const relevantJobs = useMemo(() => {
         const allJobs = [...(state.workerJobs || []), ...(state.currentJobs || [])];
-
         const uniqueJobs = Array.from(
             new Map(allJobs.map(job => [job.job_id, job])).values()
         );
-
-        return uniqueJobs.sort((a, b) =>
-            getTimestamp(b.assigned_at || b.created_at) -
-            getTimestamp(a.assigned_at || a.created_at)
-        );
+        return uniqueJobs;
     }, [state.workerJobs, state.currentJobs]);
 
-    // Memoize status counts for filter buttons
+    // Use derived state for initial loading to prevent flash
+    // If we have no jobs but isLoadingJobs is true (or we have just mounted/no data yet), we can show a loader or equivalent.
+    // However, AppContext sets isLoadingJobs. Let's rely on state.isLoadingJobs if it's reliable, 
+    // or simply check if we have data vs empty state.
+    // The user mentioned checking `filteredJobs.length === 0` renders immediately.
+
+    // Stable Sort with deterministic tie-breaker
+    const sortedJobs = useMemo(() => {
+        return [...relevantJobs].sort((a, b) => {
+            const diff = getTimestamp(b.assigned_at || b.created_at) - getTimestamp(a.assigned_at || a.created_at);
+            if (diff !== 0) return diff;
+            // deterministic tie-breaker
+            return String(b.job_id).localeCompare(String(a.job_id));
+        });
+    }, [relevantJobs]);
+
+    // Memoize stats
     const statusCounts = useMemo(() => {
         const counts: Record<string, number> = { ALL: sortedJobs.length };
         for (const job of sortedJobs) {
@@ -48,7 +63,7 @@ export default function WorkerHistoryPage() {
         return counts;
     }, [sortedJobs]);
 
-    // Memoize filtered jobs
+    // Filtered list
     const filteredJobs = useMemo(() =>
         filter === 'ALL' ? sortedJobs : sortedJobs.filter(job => job.status === filter),
         [sortedJobs, filter]
@@ -98,7 +113,7 @@ export default function WorkerHistoryPage() {
                             className={`px-4 py-2 rounded-xl font-medium border transition-all text-sm ${isActive ? colorClasses[color] : `bg-slate-800/50 text-slate-400 ${colorClasses[color]}`
                                 }`}
                         >
-                            {label} {count > 0 && <span className="ml-1 opacity-70">({count})</span>}
+                            {label} <span className="ml-1 opacity-60 text-xs">({count})</span>
                         </button>
                     );
                 })}
@@ -137,51 +152,30 @@ export default function WorkerHistoryPage() {
                 </div>
             </div>
 
-            {/* Jobs List */}
-            {state.isLoadingJobs ? (
-                /* Loading Skeleton */
-                <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                        <div key={i} className="glass border border-slate-800 rounded-2xl p-6 animate-pulse">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="loading-skeleton h-5 w-24 rounded"></div>
-                                <div className="loading-skeleton h-6 w-20 rounded-full"></div>
-                            </div>
-                            <div className="loading-skeleton h-4 w-3/4 rounded mb-2"></div>
-                            <div className="loading-skeleton h-4 w-1/2 rounded"></div>
-                        </div>
-                    ))}
-                </div>
-            ) : filteredJobs.length > 0 ? (
-                <div className="space-y-4">
-                    {filteredJobs.map((job, index) => {
-                        const { gas, usd } = formatGasWithUSD(job.amount);
-                        const isActive = ['LOCKED', 'PAYMENT_PENDING', 'DISPUTED'].includes(job.status);
+            {/* Job List */}
+            <div className="space-y-4">
+                {state.isLoadingJobs ? (
+                    <div className="flex justify-center py-12">
+                        <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+                    </div>
+                ) : filteredJobs.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-800/30 rounded-2xl border border-slate-700 border-dashed">
+                        <Briefcase className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-slate-400">No jobs found</h3>
+                        <p className="text-slate-500 mt-2">Try changing the filter or look for new work.</p>
+                    </div>
+                ) : (
+                    filteredJobs.map((job) => {
                         const statusConfig = getStatusConfig(job.status);
-                        const staggerClass = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'][index % 4];
+                        const { gas, usd } = formatGasWithUSD(job.amount);
+
+                        const status = getVerificationStatus(job);
 
                         return (
                             <div
                                 key={job.job_id}
-                                className={`group glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all animate-fade-in-up ${staggerClass}`}
+                                className="bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-5 hover:bg-slate-800/60 transition-colors group"
                             >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-cyan-400 font-semibold">Job #{job.job_id}</span>
-                                        {isActive && (
-                                            <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full flex items-center gap-1">
-                                                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
-                                                Active
-                                            </span>
-                                        )}
-                                    </div>
-                                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
-                                        {statusConfig.icon}
-                                        {job.status.replaceAll('_', ' ')}
-                                    </span>
-                                </div>
-
-                                <p className="text-slate-300 text-sm mb-3 leading-relaxed">{job.description}</p>
 
                                 {job.location && (
                                     <div className="flex items-center mb-2 text-slate-400">
@@ -199,15 +193,20 @@ export default function WorkerHistoryPage() {
                                 )}
 
                                 {/* Verification Result */}
-                                {job.verification_summary && (
-                                    <div className={`flex items-center mb-2 ${job.verification_summary.verified ? 'text-green-400' : 'text-red-400'}`}>
-                                        {job.verification_summary.verified ? (
+                                {status && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedJobForVerification(job)}
+                                        aria-label={`Open verification report for job ${job.job_id}`}
+                                        className={`flex items-center mb-2 text-left bg-transparent p-0 border-0 cursor-pointer hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none rounded-md ${status.isApproved ? 'text-green-400 focus-visible:ring-green-500' : 'text-red-400 focus-visible:ring-red-500'}`}
+                                    >
+                                        {status.isApproved ? (
                                             <CheckCircle2 className="h-4 w-4 mr-1.5" />
                                         ) : (
                                             <AlertTriangle className="h-4 w-4 mr-1.5" />
                                         )}
-                                        <span className="text-xs">{job.verification_summary.verdict}</span>
-                                    </div>
+                                        <span className="text-xs">{status.verdict} • Click for details</span>
+                                    </button>
                                 )}
 
                                 <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
@@ -235,22 +234,16 @@ export default function WorkerHistoryPage() {
                                 </div>
                             </div>
                         );
-                    })}
-                </div>
-            ) : (
-                <div className="text-center py-16 glass border border-slate-800 rounded-2xl">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/50 flex items-center justify-center">
-                        <Briefcase className="w-8 h-8 text-slate-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">No jobs found</h3>
-                    <p className="text-slate-400">
-                        {filter === 'ALL'
-                            ? 'Claim your first job to start building your work history.'
-                            : `No jobs with status "${filter.replaceAll('_', ' ')}".`
-                        }
-                    </p>
-                </div>
-            )}
+                    })
+                )}
+            </div>
+
+            {/* Verification Details Modal */}
+            <VerificationModal
+                isOpen={!!selectedJobForVerification}
+                onClose={() => setSelectedJobForVerification(null)}
+                job={selectedJobForVerification}
+            />
         </div>
     );
 }

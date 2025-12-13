@@ -356,7 +356,7 @@ class NeoMCP:
     
     async def release_funds_on_chain(self, job_id: int) -> Dict[str, Any]:
         """
-        Release funds to worker after AI Tribunal verification.
+        Release funds to worker after Admin Tribunal (agent role) verification.
         Only callable by AGENT role.
         
         This is the core method for TASK-015: Agent verifies task completion

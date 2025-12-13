@@ -15,7 +15,7 @@ GigSmartPay automates the trust layer between clients and gig workers:
 
 1.  **Client:** Chats with an AI to describe the job. The AI extracts requirements, sets a price, and locks funds in a smart contract.
 2.  **Worker:** Accepts the job, performs the work, and uses the **in-app camera** to take proof photos.
-3.  **AI Tribunal:** The "Eye Agent" (GPT-4o Vision) analyzes the proof against the requirements.
+3.  **Admin Tribunal:** The "Eye Agent" (GPT-4o Vision) analyzes the proof against the requirements.
     - **Pass:** Payment is auto-released instantly via blockchain.
     - **Fail:** Dispute is raised for arbitration.
 
@@ -26,7 +26,7 @@ graph TD
     subgraph Frontend [Next.js Web App]
         UI[User Interface]
         Chat[Conversational Job Creator]
-        Cam[In-App Camera / ImageUpload]
+        Cam["In-App Camera / ImageUpload"]
         Toast[Payment Toasts]
         SocketClient[WebSocket Client]
     end
@@ -37,8 +37,8 @@ graph TD
         
         subgraph Agents [AI Agents]
             Planner[Conversational Agent]
-            Eye[Eye Agent (Vision)]
-            Paralegal[Paralegal (Contracts)]
+            Eye["Eye Agent (Vision)"]
+            Paralegal["Paralegal (Contracts)"]
         end
     end
 

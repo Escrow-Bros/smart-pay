@@ -67,7 +67,7 @@ export default function TribunalDashboard() {
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">AI Tribunal Dashboard</h1>
+                    <h1 className="text-3xl font-bold text-white mb-2">Admin Tribunal Dashboard</h1>
                     <p className="text-slate-400">Review and resolve disputes with AI assistance</p>
                 </div>
                 <button

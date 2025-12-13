@@ -188,7 +188,7 @@ export default function Home() {
                 <Scale className="w-8 h-8 text-purple-400" />
               </div>
               <h2 className="text-2xl font-bold text-white mb-2">
-                AI Tribunal
+                Admin Tribunal
               </h2>
               <p className="text-slate-400 text-sm mb-5">
                 Review disputes and resolve conflicts
