@@ -4,15 +4,19 @@ import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
 import { MapPin, Clock, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function WorkerJobsPage() {
     const { state, claimJob } = useApp();
     const [claimingJobId, setClaimingJobId] = useState<number | null>(null);
+    const isAnyClaiming = claimingJobId !== null;
 
     const handleClaim = async (jobId: number) => {
         setClaimingJobId(jobId);
         try {
             await claimJob(jobId);
+        } catch (error) {
+            toast.error('Failed to claim job. Please try again.');
         } finally {
             setClaimingJobId(null);
         }
@@ -51,11 +55,12 @@ export default function WorkerJobsPage() {
                     {state.availableJobs.map((job, index) => {
                         const { gas, usd } = formatGasWithUSD(job.amount);
                         const isClaiming = claimingJobId === job.job_id;
+                        const staggerClass = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'][index % 4];
 
                         return (
                             <div
                                 key={job.job_id}
-                                className={`group relative glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all duration-300 animate-fade-in-up stagger-${(index % 4) + 1}`}
+                                className={`group relative glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all duration-300 animate-fade-in-up ${staggerClass}`}
                             >
                                 {/* Gradient overlay on hover */}
                                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
@@ -99,6 +104,9 @@ export default function WorkerJobsPage() {
                                                     <img
                                                         src={photo}
                                                         alt={`Reference ${i + 1}`}
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                        referrerPolicy="no-referrer"
                                                         className="w-full h-full object-cover"
                                                     />
                                                 </div>
@@ -114,11 +122,13 @@ export default function WorkerJobsPage() {
                                     <div className="flex justify-between items-center pt-3 border-t border-slate-800">
                                         <div className="flex items-center text-slate-500 text-xs">
                                             <Clock className="w-3.5 h-3.5 mr-1" />
-                                            Posted {new Date(job.created_at).toLocaleDateString()}
+                                            Posted {job.created_at && !isNaN(new Date(job.created_at).getTime())
+                                                ? new Date(job.created_at).toLocaleDateString()
+                                                : 'Unknown date'}
                                         </div>
                                         <button
                                             onClick={() => handleClaim(job.job_id)}
-                                            disabled={isClaiming}
+                                            disabled={isClaiming || isAnyClaiming}
                                             className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20 hover:shadow-green-500/30"
                                         >
                                             {isClaiming ? (

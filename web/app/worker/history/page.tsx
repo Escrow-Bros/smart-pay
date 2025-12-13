@@ -19,9 +19,15 @@ export default function WorkerHistoryPage() {
             new Map(allJobs.map(job => [job.job_id, job])).values()
         );
 
+        const getTimestamp = (dateStr: string | undefined): number => {
+            if (!dateStr) return 0;
+            const time = new Date(dateStr).getTime();
+            return isNaN(time) ? 0 : time;
+        };
+
         return uniqueJobs.sort((a, b) =>
-            new Date(b.assigned_at || b.created_at).getTime() -
-            new Date(a.assigned_at || a.created_at).getTime()
+            getTimestamp(b.assigned_at || b.created_at) -
+            getTimestamp(a.assigned_at || a.created_at)
         );
     }, [state.workerJobs, state.currentJobs]);
 

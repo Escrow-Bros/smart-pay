@@ -112,6 +112,9 @@ export default function ClientJobsPage() {
                                                         <img
                                                             src={photo}
                                                             alt={`Reference ${i + 1}`}
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            referrerPolicy="no-referrer"
                                                             className="w-full h-full object-cover"
                                                         />
                                                     </div>
@@ -141,6 +144,9 @@ export default function ClientJobsPage() {
                                                         <img
                                                             src={photo}
                                                             alt={`Proof ${i + 1}`}
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            referrerPolicy="no-referrer"
                                                             className="w-full h-full object-cover"
                                                         />
                                                     </div>

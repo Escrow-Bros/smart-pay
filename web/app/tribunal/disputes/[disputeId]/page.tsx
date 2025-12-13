@@ -192,7 +192,7 @@ export default function DisputeDetailPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InfoField label="Job ID" value={`#${dispute.job_id}`} icon={<Scale className="w-4 h-4" />} />
-                    <InfoField label="Amount" value={`${dispute.amount} GAS`} icon={<Wallet className="w-4 h-4" />} />
+                    <InfoField label="Amount" value={dispute.amount != null ? `${dispute.amount} GAS` : 'N/A'} icon={<Wallet className="w-4 h-4" />} />
                     <InfoField label="Job Description" value={dispute.description || 'N/A'} isLong />
                     <InfoField label="Dispute Reason" value={dispute.reason || 'N/A'} isLong />
                     <InfoField label="Client" value={shortenAddress(dispute.client_address || '')} icon={<User className="w-4 h-4" />} />
@@ -223,37 +223,43 @@ export default function DisputeDetailPage() {
                     <p className="text-sm text-slate-300 mb-4">{dispute.ai_verdict.reason || 'No reason provided'}</p>
 
                     {/* Score Breakdown */}
-                    {dispute.ai_verdict.breakdown && (
-                        <div className="border-t border-purple-500/20 pt-4 mt-4">
-                            <p className="text-xs font-semibold text-purple-300 mb-3">Score Breakdown:</p>
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                {Object.entries(dispute.ai_verdict.breakdown).map(([key, value]: [string, any]) => (
-                                    <div key={key} className="bg-slate-800/50 rounded-xl p-3 text-center">
-                                        <p className="text-purple-400 text-lg font-bold">{value}</p>
-                                        <p className="text-xs text-slate-400 capitalize">{key.replace(/_/g, ' ')}</p>
-                                    </div>
-                                ))}
+                    {dispute.ai_verdict.breakdown &&
+                        typeof dispute.ai_verdict.breakdown === 'object' &&
+                        !Array.isArray(dispute.ai_verdict.breakdown) && (
+                            <div className="border-t border-purple-500/20 pt-4 mt-4">
+                                <p className="text-xs font-semibold text-purple-300 mb-3">Score Breakdown:</p>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                    {Object.entries(dispute.ai_verdict.breakdown).map(([key, value]: [string, unknown]) => (
+                                        <div key={key} className="bg-slate-800/50 rounded-xl p-3 text-center">
+                                            <p className="text-purple-400 text-lg font-bold">{value != null ? String(value) : 'N/A'}</p>
+                                            <p className="text-xs text-slate-400 capitalize">{key.replace(/_/g, ' ')}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
                     {/* GPS Data */}
-                    {dispute.ai_verdict.gps_data && (
-                        <div className="border-t border-purple-500/20 pt-4 mt-4">
-                            <p className="text-xs font-semibold text-purple-300 mb-2 flex items-center gap-2">
-                                <MapPin className="w-4 h-4" /> GPS Verification
-                            </p>
-                            <div className="flex gap-4 text-sm">
-                                <span className="text-slate-400">
-                                    Distance: <strong className="text-white">{dispute.ai_verdict.gps_data.distance_meters}m</strong>
-                                </span>
-                                <span className={`font-semibold ${dispute.ai_verdict.gps_data.tier === 'failed' ? 'text-red-400' : 'text-green-400'
-                                    }`}>
-                                    {dispute.ai_verdict.gps_data.tier?.toUpperCase()}
-                                </span>
+                    {dispute.ai_verdict.gps_data &&
+                        typeof dispute.ai_verdict.gps_data === 'object' && (
+                            <div className="border-t border-purple-500/20 pt-4 mt-4">
+                                <p className="text-xs font-semibold text-purple-300 mb-2 flex items-center gap-2">
+                                    <MapPin className="w-4 h-4" /> GPS Verification
+                                </p>
+                                <div className="flex gap-4 text-sm">
+                                    <span className="text-slate-400">
+                                        Distance: <strong className="text-white">
+                                            {dispute.ai_verdict.gps_data.distance_meters != null
+                                                ? `${dispute.ai_verdict.gps_data.distance_meters}m`
+                                                : 'N/A'}
+                                        </strong>
+                                    </span>
+                                    <span className={`font-semibold ${dispute.ai_verdict.gps_data.tier === 'failed' ? 'text-red-400' : 'text-green-400'}`}>
+                                        {dispute.ai_verdict.gps_data.tier?.toUpperCase() || 'N/A'}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
                 </div>
             )}
 
