@@ -7,6 +7,12 @@ import ImageUpload from '@/components/ImageUpload';
 import { JobDict, UploadedImage } from '@/lib/types';
 import { formatGasWithUSD } from '@/lib/currency';
 import toast from 'react-hot-toast';
+import { showPaymentProcessing } from '@/components/PaymentToast';
+import {
+    MapPin, Loader2, ClipboardCheck, CheckCircle2, Clock,
+    AlertCircle, Info, MapPinned, Briefcase, RefreshCw,
+    Send, AlertTriangle, CheckCircle
+} from 'lucide-react';
 
 interface TimelineStage {
     id: string;
@@ -22,10 +28,29 @@ export default function WorkerCurrentJobPage() {
     const [proofImages, setProofImages] = useState<UploadedImage[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showLocationModal, setShowLocationModal] = useState(false);
+    const [showLocationPreview, setShowLocationPreview] = useState(false);
+    const [detectedLocation, setDetectedLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
     const [pendingSubmit, setPendingSubmit] = useState(false);
+    const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [locationPermission, setLocationPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
     const [showVerificationModal, setShowVerificationModal] = useState(false);
     const [verificationThinking, setVerificationThinking] = useState<string[]>([]);
+
+    // Calculate distance between two coordinates using Haversine formula
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+        const R = 6371e3; // Earth's radius in meters
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c; // Distance in meters
+    };
 
     // Check location permission on mount
     useEffect(() => {
@@ -56,15 +81,18 @@ export default function WorkerCurrentJobPage() {
     // If no jobs, show empty state
     if (!state.currentJobs || state.currentJobs.length === 0) {
         return (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-fade-in-up">
                 <div className="mb-8">
                     <h2 className="text-3xl font-bold text-white mb-2">Current Jobs</h2>
                     <p className="text-slate-400">Your active job assignments.</p>
                 </div>
 
-                <div className="text-center py-12 bg-slate-900/30 border border-slate-800 rounded-xl">
-                    <p className="text-slate-400 mb-2">No active jobs</p>
-                    <p className="text-slate-500 text-sm">Claim a job from the Available Jobs page to start working.</p>
+                <div className="text-center py-16 glass border border-slate-800 rounded-2xl">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/50 flex items-center justify-center">
+                        <Briefcase className="w-8 h-8 text-slate-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">No active jobs</h3>
+                    <p className="text-slate-400">Claim a job from Available Jobs to start working.</p>
                 </div>
             </div>
         );
@@ -205,55 +233,98 @@ export default function WorkerCurrentJobPage() {
         return stages;
     };
 
+    // Get location with retry logic
+    const getLocationWithRetry = (retryCount = 0): Promise<GeolocationPosition> => {
+        return new Promise((resolve, reject) => {
+            const timeout = retryCount === 0 ? 10000 : 20000; // First try 10s, retry 20s
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    console.log(`Location obtained (attempt ${retryCount + 1}):`, {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    });
+                    resolve(position);
+                },
+                (error) => {
+                    console.error(`Geolocation error (attempt ${retryCount + 1}):`, error);
+                    if (retryCount < 1 && error.code !== 1) {
+                        // Retry once if it's not a permission denial
+                        console.log('Retrying location request...');
+                        toast('📍 Getting location, please wait...', { icon: '🔄', duration: 2000 });
+                        setTimeout(() => {
+                            getLocationWithRetry(retryCount + 1).then(resolve).catch(reject);
+                        }, 500);
+                    } else {
+                        reject(error);
+                    }
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: timeout,
+                    maximumAge: 30000 // Accept cached location up to 30 seconds old
+                }
+            );
+        });
+    };
+
     const handleRequestLocation = async () => {
         setShowLocationModal(false);
+        setIsGettingLocation(true);
 
         if (!navigator.geolocation) {
             toast.error('Geolocation is not supported by your browser');
             setPendingSubmit(false);
+            setIsGettingLocation(false);
             return;
         }
 
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                console.log('Location obtained:', {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy
-                });
+        try {
+            const position = await getLocationWithRetry();
 
-                // Update permission state
-                setLocationPermission('granted');
+            // Update permission state
+            setLocationPermission('granted');
 
-                const workerLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy
-                };
+            const workerLocation = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            };
 
-                await submitProofWithLocation(workerLocation);
-            },
-            (error) => {
-                console.error('Geolocation error:', error);
-                setPendingSubmit(false);
+            // Store detected location and show preview instead of auto-submitting
+            setDetectedLocation(workerLocation);
+            setIsGettingLocation(false);
+            setShowLocationPreview(true);
+        } catch (error: any) {
+            setPendingSubmit(false);
+            setIsGettingLocation(false);
 
-                // Show specific error message based on error code
-                if (error.code === 1) {
-                    toast.error('📍 Location permission denied. Please enable location access and try again.');
-                } else if (error.code === 2) {
-                    toast.error('📍 Location unavailable. Please check your GPS settings and try again.');
-                } else if (error.code === 3) {
-                    toast.error('📍 Location request timed out. Please try again.');
-                } else {
-                    toast.error('📍 Unable to get your location. Please enable GPS and try again.');
-                }
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 15000, // Increased from 10000 to 15000ms
-                maximumAge: 0
+            // Show specific error message based on error code
+            if (error.code === 1) {
+                toast.error('📍 Location permission denied. Please enable location in your browser settings and try again.', { duration: 6000 });
+            } else if (error.code === 2) {
+                toast.error('📍 Location unavailable. Please check your GPS settings and try again.', { duration: 6000 });
+            } else if (error.code === 3) {
+                toast.error('📍 Location request timed out. Please move to a location with better GPS signal and try again.', { duration: 6000 });
+            } else {
+                toast.error('📍 Unable to get your location. Please refresh the page and try again.', { duration: 6000 });
             }
-        );
+        }
+    };
+
+    // User confirms location is correct
+    const handleConfirmLocation = async () => {
+        if (!detectedLocation) return;
+        setShowLocationPreview(false);
+        await submitProofWithLocation(detectedLocation);
+    };
+
+    // User wants to retry getting location
+    const handleRetryLocation = () => {
+        setDetectedLocation(null);
+        setShowLocationPreview(false);
+        handleRequestLocation();
     };
 
     const submitProofWithLocation = async (workerLocation: { lat: number; lng: number; accuracy: number }) => {
@@ -271,10 +342,8 @@ export default function WorkerCurrentJobPage() {
             const result = await apiClient.submitProof(activeJob.job_id, ipfsUrls, workerLocation);
 
             if (result.success) {
-                toast.success('✅ Work approved! Payment transaction sent to blockchain. You\'ll be notified when it confirms.', {
-                    duration: 5000,
-                    position: 'top-center',
-                });
+                const { gas, usd } = formatGasWithUSD(activeJob.amount);
+                showPaymentProcessing(gas, usd, activeJob.job_id);
                 setProofImages([]);
                 setSelectedJob(null);  // Clear selection to show updated job
                 await fetchData();  // Refresh to show PAYMENT_PENDING status
@@ -314,7 +383,7 @@ export default function WorkerCurrentJobPage() {
     };
 
     return (
-        <div className="animate-in fade-in duration-500">
+        <div className="animate-fade-in-up">
             <div className="mb-8">
                 <h2 className="text-3xl font-bold text-white mb-2">Current Jobs</h2>
                 <p className="text-slate-400">Complete your work and submit proof to get paid.</p>
@@ -388,21 +457,17 @@ export default function WorkerCurrentJobPage() {
                             <p className="text-slate-200 mb-4">{activeJob.description}</p>
 
                             {activeJob.location && (
-                                <div className="flex items-center mb-3">
-                                    <svg className="h-5 w-5 text-slate-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    </svg>
+                                <div className="flex items-center mb-3 text-slate-400">
+                                    <MapPin className="h-5 w-5 mr-2 text-slate-500" />
                                     <span className="text-slate-300">{activeJob.location}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* Verification Plan */}
-                        <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-800 mb-6">
-                            <h3 className="text-white font-semibold mb-4 flex items-center">
-                                <svg className="w-5 h-5 mr-2 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                        <div className="glass border border-slate-800 rounded-2xl p-6 mb-6">
+                            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                                <ClipboardCheck className="w-5 h-5 text-cyan-500" />
                                 Verification Plan
                             </h3>
 
@@ -503,10 +568,10 @@ export default function WorkerCurrentJobPage() {
                                             {/* Icon */}
                                             <div className="flex flex-col items-center">
                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all ${stage.status === 'completed'
-                                                        ? 'bg-green-500/20 text-green-400 border-2 border-green-500'
-                                                        : stage.status === 'current'
-                                                            ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500 animate-pulse'
-                                                            : 'bg-slate-800/50 text-slate-600 border-2 border-slate-700'
+                                                    ? 'bg-green-500/20 text-green-400 border-2 border-green-500'
+                                                    : stage.status === 'current'
+                                                        ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500 animate-pulse'
+                                                        : 'bg-slate-800/50 text-slate-600 border-2 border-slate-700'
                                                     }`}>
                                                     {stage.icon}
                                                 </div>
@@ -519,14 +584,14 @@ export default function WorkerCurrentJobPage() {
                                             {/* Content */}
                                             <div className="flex-1 pb-4">
                                                 <h4 className={`font-medium mb-1 ${stage.status === 'completed' ? 'text-green-400' :
-                                                        stage.status === 'current' ? 'text-blue-400' :
-                                                            'text-slate-500'
+                                                    stage.status === 'current' ? 'text-blue-400' :
+                                                        'text-slate-500'
                                                     }`}>
                                                     {stage.label}
                                                 </h4>
                                                 <p className={`text-sm ${stage.status === 'completed' ? 'text-slate-400' :
-                                                        stage.status === 'current' ? 'text-slate-300' :
-                                                            'text-slate-600'
+                                                    stage.status === 'current' ? 'text-slate-300' :
+                                                        'text-slate-600'
                                                     }`}>
                                                     {stage.description}
                                                 </p>
@@ -592,8 +657,8 @@ export default function WorkerCurrentJobPage() {
                                                 {stage.id === 'verification' && activeJob.verification_summary && (
                                                     <div className="mt-2 space-y-2">
                                                         <div className={`p-3 rounded-lg text-sm ${activeJob.verification_summary.verified
-                                                                ? 'bg-green-900/20 border border-green-800 text-green-300'
-                                                                : 'bg-red-900/20 border border-red-800 text-red-300'
+                                                            ? 'bg-green-900/20 border border-green-800 text-green-300'
+                                                            : 'bg-red-900/20 border border-red-800 text-red-300'
                                                             }`}>
                                                             {activeJob.verification_summary.verdict}
                                                         </div>
@@ -622,7 +687,8 @@ export default function WorkerCurrentJobPage() {
                         {/* Show submission form if job is IN_PROGRESS or DISPUTED (allow resubmission) */}
                         {(activeJob.status === 'IN_PROGRESS' || activeJob.status === 'DISPUTED') && (
                             <div className="border-t border-slate-700 pt-6">
-                                <h3 className="text-white font-semibold mb-3">
+                                <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                    <Send className="w-5 h-5 text-cyan-400" />
                                     {activeJob.status === 'DISPUTED' ? 'Resubmit Proof of Completion' : 'Submit Proof of Completion'}
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
@@ -635,17 +701,29 @@ export default function WorkerCurrentJobPage() {
                                     images={proofImages}
                                     onAdd={handleAddImage}
                                     onRemove={handleRemoveImage}
+                                    maxImages={4}
+                                    label="Proof Photos"
                                 />
 
                                 <button
                                     onClick={handleSubmit}
                                     disabled={isSubmitting || proofImages.length === 0}
-                                    className={`w-full mt-4 font-semibold py-3 rounded-xl transition-all active:scale-95 ${isSubmitting || proofImages.length === 0
+                                    className={`w-full mt-4 flex items-center justify-center gap-2 font-semibold py-3.5 rounded-xl transition-all active:scale-95 ${isSubmitting || proofImages.length === 0
                                         ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                        : 'bg-green-600 hover:bg-green-500 text-white'
+                                        : 'bg-gradient-to-r from-green-600 to-cyan-600 hover:from-green-500 hover:to-cyan-500 text-white hover:shadow-lg hover:shadow-green-500/30'
                                         }`}
                                 >
-                                    {isSubmitting ? 'Submitting...' : 'Submit for Verification'}
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Submitting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="w-5 h-5" />
+                                            Submit for Verification
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         )}
@@ -693,10 +771,10 @@ export default function WorkerCurrentJobPage() {
                                         <div
                                             key={index}
                                             className={`animate-in slide-in-from-left duration-300 ${isHeader
-                                                    ? 'font-semibold text-white text-base mt-4 first:mt-0'
-                                                    : isSubItem
-                                                        ? 'text-slate-300 text-sm ml-4 pl-4 border-l-2 border-slate-700'
-                                                        : 'text-slate-300 text-sm'
+                                                ? 'font-semibold text-white text-base mt-4 first:mt-0'
+                                                : isSubItem
+                                                    ? 'text-slate-300 text-sm ml-4 pl-4 border-l-2 border-slate-700'
+                                                    : 'text-slate-300 text-sm'
                                                 } ${isSuccess ? 'text-green-400' : isError ? 'text-red-400' : ''
                                                 }`}
                                             style={{ animationDelay: `${index * 50}ms` }}
@@ -710,8 +788,8 @@ export default function WorkerCurrentJobPage() {
                             {/* Summary Card */}
                             {activeJob.verification_summary && (
                                 <div className={`mt-6 p-4 rounded-xl border-2 ${activeJob.verification_summary.verified
-                                        ? 'bg-green-900/20 border-green-700'
-                                        : 'bg-red-900/20 border-red-700'
+                                    ? 'bg-green-900/20 border-green-700'
+                                    : 'bg-red-900/20 border-red-700'
                                     }`}>
                                     <div className="flex items-start justify-between mb-3">
                                         <div>
@@ -724,8 +802,8 @@ export default function WorkerCurrentJobPage() {
                                             </p>
                                         </div>
                                         <div className={`px-3 py-1 rounded-full font-bold ${activeJob.verification_summary.verified
-                                                ? 'bg-green-500/20 text-green-400'
-                                                : 'bg-red-500/20 text-red-400'
+                                            ? 'bg-green-500/20 text-green-400'
+                                            : 'bg-red-500/20 text-red-400'
                                             }`}>
                                             {activeJob.verification_summary.score}/10
                                         </div>
@@ -778,10 +856,7 @@ export default function WorkerCurrentJobPage() {
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md mx-4 shadow-2xl animate-in zoom-in duration-200">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="bg-cyan-500/20 p-3 rounded-full">
-                                <svg className="h-6 w-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
+                                <MapPin className="h-6 w-6 text-cyan-400" />
                             </div>
                             <h3 className="text-xl font-bold text-white">Location Required</h3>
                         </div>
@@ -793,9 +868,7 @@ export default function WorkerCurrentJobPage() {
 
                         <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-6">
                             <div className="flex items-start gap-2">
-                                <svg className="h-5 w-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                                <Info className="h-5 w-5 text-cyan-400 mt-0.5 flex-shrink-0" />
                                 <p className="text-sm text-slate-400">
                                     Your location is only used for this verification and is not stored permanently.
                                 </p>
@@ -819,6 +892,121 @@ export default function WorkerCurrentJobPage() {
                                 Allow Location
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Getting Location Loading Modal */}
+            {isGettingLocation && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md mx-4 shadow-2xl text-center">
+                        <div className="flex justify-center mb-4">
+                            <Loader2 className="h-12 w-12 text-cyan-400 animate-spin" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">Getting Your Location</h3>
+                        <p className="text-slate-400">Please wait while we detect your current location...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Location Preview Modal */}
+            {showLocationPreview && detectedLocation && activeJob && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md mx-4 shadow-2xl animate-in zoom-in duration-200">
+                        {(() => {
+                            // Guard against null/undefined coordinates
+                            const hasValidCoords = activeJob.latitude != null && activeJob.longitude != null;
+                            const distance = hasValidCoords
+                                ? calculateDistance(
+                                    detectedLocation.lat,
+                                    detectedLocation.lng,
+                                    activeJob.latitude,
+                                    activeJob.longitude
+                                )
+                                : null;
+                            const isNearby = distance != null && distance <= 300;
+
+                            return (
+                                <>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className={`p-3 rounded-full ${isNearby ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+                                            <MapPinned className={`h-6 w-6 ${isNearby ? 'text-green-400' : 'text-yellow-400'}`} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white">Confirm Your Location</h3>
+                                    </div>
+
+                                    {/* Location Details */}
+                                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-4 space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-400 text-sm">Your Location</span>
+                                            <span className="text-white text-sm font-mono">
+                                                {detectedLocation.lat.toFixed(6)}, {detectedLocation.lng.toFixed(6)}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-400 text-sm">Accuracy</span>
+                                            <span className="text-white text-sm">±{detectedLocation.accuracy.toFixed(0)}m</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-t border-slate-700 pt-3">
+                                            <span className="text-slate-400 text-sm">Distance to Job</span>
+                                            <span className={`text-sm font-bold ${isNearby ? 'text-green-400' : 'text-yellow-400'}`}>
+                                                {distance != null
+                                                    ? (distance < 1000 ? `${distance.toFixed(0)}m` : `${(distance / 1000).toFixed(2)}km`)
+                                                    : 'N/A'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Status Message */}
+                                    {isNearby ? (
+                                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
+                                            <div className="flex items-start gap-2">
+                                                <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                                                <p className="text-sm text-green-300">
+                                                    You're within 300m of the job location. Ready to submit!
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
+                                            <div className="flex items-start gap-2">
+                                                <AlertTriangle className="h-5 w-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                                                <div>
+                                                    <p className="text-sm text-yellow-300 font-medium">
+                                                        {distance != null
+                                                            ? `You appear to be ${distance.toFixed(0)}m away from the job location.`
+                                                            : 'Unable to calculate distance to job location.'}
+                                                    </p>
+                                                    <p className="text-sm text-yellow-200/70 mt-1">
+                                                        Submissions more than 300m away may be rejected. Make sure you're at the right location.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleRetryLocation}
+                                            className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <RefreshCw className="h-4 w-4" />
+                                            Retry
+                                        </button>
+                                        <button
+                                            onClick={handleConfirmLocation}
+                                            className={`flex-1 px-4 py-3 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2 ${isNearby
+                                                ? 'bg-green-600 hover:bg-green-500'
+                                                : 'bg-yellow-600 hover:bg-yellow-500'
+                                                }`}
+                                        >
+                                            <CheckCircle2 className="h-4 w-4" />
+                                            Confirm & Submit
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             )}

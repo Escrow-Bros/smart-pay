@@ -3,18 +3,19 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
+import { Scale, Clock, CheckCircle2, AlertTriangle, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
 interface DisputeStats {
     pending: number;
-    under_review: number;
     resolved: number;
     total: number;
 }
 
 export default function TribunalDashboard() {
-    const [stats, setStats] = useState<DisputeStats>({ pending: 0, under_review: 0, resolved: 0, total: 0 });
+    const [stats, setStats] = useState<DisputeStats>({ pending: 0, resolved: 0, total: 0 });
     const [recentDisputes, setRecentDisputes] = useState<DisputeDict[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -28,19 +29,12 @@ export default function TribunalDashboard() {
             if (data.success) {
                 const disputes = data.disputes as DisputeDict[];
 
-                // Calculate stats
-                const pending = disputes.filter(d => d.status === 'PENDING').length;
-                const under_review = disputes.filter(d => d.status === 'UNDER_REVIEW').length;
+                // Pending = anything not resolved
+                const pending = disputes.filter(d => d.status !== 'RESOLVED').length;
                 const resolved = disputes.filter(d => d.status === 'RESOLVED').length;
 
-                setStats({
-                    pending,
-                    under_review,
-                    resolved,
-                    total: disputes.length
-                });
+                setStats({ pending, resolved, total: disputes.length });
 
-                // Get 5 most recent unresolved disputes
                 const unresolved = disputes
                     .filter(d => d.status !== 'RESOLVED')
                     .slice(0, 5);
@@ -50,102 +44,118 @@ export default function TribunalDashboard() {
             console.error('Failed to fetch disputes:', error);
         } finally {
             setIsLoading(false);
+            setIsRefreshing(false);
         }
+    };
+
+    const handleRefresh = () => {
+        setIsRefreshing(true);
+        fetchData();
     };
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500">Loading dashboard...</div>
+            <div className="flex flex-col items-center justify-center h-64 animate-fade-in-up">
+                <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-4" />
+                <p className="text-slate-400">Loading tribunal dashboard...</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-8">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="space-y-8 animate-fade-in-up">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold text-white mb-2">AI Tribunal Dashboard</h1>
+                    <p className="text-slate-400">Review and resolve disputes with AI assistance</p>
+                </div>
+                <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-400 hover:bg-purple-500/20 transition-all disabled:opacity-50"
+                >
+                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    Refresh
+                </button>
+            </div>
+
+            {/* Stats Cards - Only 3 now: Pending, Resolved, Total */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard
-                    title="Pending Review"
+                    title="Pending"
                     value={stats.pending}
-                    color="red"
-                    icon="⏱️"
-                />
-                <StatCard
-                    title="Under Review"
-                    value={stats.under_review}
                     color="yellow"
-                    icon="🔍"
+                    icon={<Clock className="w-6 h-6" />}
                 />
                 <StatCard
                     title="Resolved"
                     value={stats.resolved}
                     color="green"
-                    icon="✅"
+                    icon={<CheckCircle2 className="w-6 h-6" />}
                 />
                 <StatCard
                     title="Total Disputes"
                     value={stats.total}
-                    color="blue"
-                    icon="📊"
+                    color="purple"
+                    icon={<Scale className="w-6 h-6" />}
                 />
             </div>
 
             {/* Recent Disputes */}
-            <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-gray-900">Recent Unresolved Disputes</h2>
+            <div className="glass border border-slate-800 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                        <h2 className="text-lg font-semibold text-white">Pending Disputes</h2>
+                    </div>
                     <Link
                         href="/tribunal/disputes"
-                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 font-medium transition-colors"
                     >
-                        View All →
+                        View All
+                        <ChevronRight className="w-4 h-4" />
                     </Link>
                 </div>
 
                 {recentDisputes.length === 0 ? (
-                    <div className="px-6 py-12 text-center text-gray-500">
-                        <div className="text-4xl mb-2">🎉</div>
-                        <p>No pending disputes!</p>
-                        <p className="text-sm mt-1">All work is being approved smoothly.</p>
+                    <div className="px-6 py-16 text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-green-500/10 flex items-center justify-center">
+                            <CheckCircle2 className="w-8 h-8 text-green-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-2">All Clear!</h3>
+                        <p className="text-slate-400">No pending disputes. AI is doing its job.</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-200">
-                        {recentDisputes.map((dispute) => (
+                    <div className="divide-y divide-slate-800">
+                        {recentDisputes.map((dispute, index) => (
                             <Link
                                 key={dispute.dispute_id}
                                 href={`/tribunal/disputes/${dispute.dispute_id}`}
-                                className="block px-6 py-4 hover:bg-gray-50 transition-colors"
+                                className={`group block px-6 py-5 hover:bg-slate-800/50 transition-all animate-fade-in-up stagger-${index + 1}`}
                             >
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-3 mb-2">
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${dispute.status === 'PENDING'
-                                                    ? 'bg-red-100 text-red-800'
-                                                    : 'bg-yellow-100 text-yellow-800'
-                                                }`}>
-                                                {dispute.status}
+                                            <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-400">
+                                                <Clock className="w-3 h-3" />
+                                                PENDING
                                             </span>
-                                            <span className="text-sm text-gray-500">
-                                                Job #{dispute.job_id}
-                                            </span>
+                                            <span className="text-sm text-slate-500">Job #{dispute.job_id}</span>
+                                            <span className="text-xs text-slate-600">• {dispute.amount} GAS</span>
                                         </div>
-                                        <h3 className="text-sm font-medium text-gray-900 truncate mb-1">
+                                        <h3 className="text-sm font-medium text-white truncate mb-1 group-hover:text-purple-300 transition-colors">
                                             {dispute.description || 'No description'}
                                         </h3>
-                                        <p className="text-sm text-gray-600 line-clamp-2">
+                                        <p className="text-sm text-slate-400 line-clamp-1">
                                             {dispute.reason}
                                         </p>
-                                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                                            <span>Raised by: {dispute.raised_by?.slice(0, 10)}...</span>
-                                            <span>Amount: {dispute.amount} GAS</span>
-                                            <span>{new Date(dispute.raised_at).toLocaleDateString()}</span>
+                                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                                            <span>Raised: {new Date(dispute.raised_at).toLocaleDateString()}</span>
                                         </div>
                                     </div>
                                     <div className="ml-4 flex-shrink-0">
-                                        <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                        </svg>
+                                        <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
                                     </div>
                                 </div>
                             </Link>
@@ -154,27 +164,32 @@ export default function TribunalDashboard() {
                 )}
             </div>
 
-            {/* Quick Actions */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h3 className="text-sm font-semibold text-blue-900 mb-3">Quick Actions</h3>
-                <div className="space-y-2">
+            {/* Quick Actions - Only 2 now */}
+            <div className="glass border border-purple-500/30 rounded-2xl p-6 bg-gradient-to-r from-purple-500/5 to-transparent">
+                <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-purple-400" />
+                    Quick Actions
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Link
                         href="/tribunal/disputes?status=PENDING"
-                        className="block text-sm text-blue-700 hover:text-blue-900 hover:underline"
+                        className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-yellow-500/10 border border-slate-700 hover:border-yellow-500/50 transition-all group"
                     >
-                        → Review pending disputes ({stats.pending})
-                    </Link>
-                    <Link
-                        href="/tribunal/disputes?status=UNDER_REVIEW"
-                        className="block text-sm text-blue-700 hover:text-blue-900 hover:underline"
-                    >
-                        → Continue reviews in progress ({stats.under_review})
+                        <div className="flex items-center gap-3">
+                            <Clock className="w-5 h-5 text-yellow-400" />
+                            <span className="text-sm text-slate-300">Review Pending</span>
+                        </div>
+                        <span className="text-lg font-bold text-yellow-400">{stats.pending}</span>
                     </Link>
                     <Link
                         href="/tribunal/disputes?status=RESOLVED"
-                        className="block text-sm text-blue-700 hover:text-blue-900 hover:underline"
+                        className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-green-500/10 border border-slate-700 hover:border-green-500/50 transition-all group"
                     >
-                        → View resolution history ({stats.resolved})
+                        <div className="flex items-center gap-3">
+                            <CheckCircle2 className="w-5 h-5 text-green-400" />
+                            <span className="text-sm text-slate-300">View History</span>
+                        </div>
+                        <span className="text-lg font-bold text-green-400">{stats.resolved}</span>
                     </Link>
                 </div>
             </div>
@@ -182,22 +197,21 @@ export default function TribunalDashboard() {
     );
 }
 
-function StatCard({ title, value, color, icon }: { title: string; value: number; color: string; icon: string }) {
-    const colorClasses = {
-        red: 'bg-red-50 text-red-700 border-red-200',
-        yellow: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-        green: 'bg-green-50 text-green-700 border-green-200',
-        blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    }[color];
+function StatCard({ title, value, color, icon }: { title: string; value: number; color: string; icon: React.ReactNode }) {
+    const colorClasses: Record<string, string> = {
+        yellow: 'from-yellow-500/10 to-transparent border-yellow-500/30 text-yellow-400',
+        green: 'from-green-500/10 to-transparent border-green-500/30 text-green-400',
+        purple: 'from-purple-500/10 to-transparent border-purple-500/30 text-purple-400',
+    };
 
     return (
-        <div className={`rounded-lg border-2 p-6 ${colorClasses}`}>
+        <div className={`glass rounded-2xl border p-6 bg-gradient-to-br ${colorClasses[color]}`}>
             <div className="flex items-center justify-between">
                 <div>
-                    <p className="text-sm font-medium opacity-80">{title}</p>
-                    <p className="text-3xl font-bold mt-2">{value}</p>
+                    <p className="text-sm text-slate-400 mb-1">{title}</p>
+                    <p className="text-3xl font-bold">{value}</p>
                 </div>
-                <div className="text-4xl opacity-50">{icon}</div>
+                <div className="opacity-60">{icon}</div>
             </div>
         </div>
     );

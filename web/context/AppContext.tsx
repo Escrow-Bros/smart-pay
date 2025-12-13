@@ -3,8 +3,9 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { GlobalState, UserMode, JobDict, WorkerStats, UploadedImage } from '@/lib/types';
 import { apiClient } from '@/lib/api';
-import { initializePriceCache, getGasUsdPrice } from '@/lib/currency';
+import { initializePriceCache, getGasUsdPrice, formatGasWithUSD } from '@/lib/currency';
 import toast from 'react-hot-toast';
+import { showPaymentConfirmed } from '@/components/PaymentToast';
 
 const CLIENT_ADDR = process.env.NEXT_PUBLIC_CLIENT_ADDR || '';
 const WORKER_ADDR = process.env.NEXT_PUBLIC_WORKER_ADDR || '';
@@ -252,10 +253,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     // Handle different event types
                     if (data.type === 'JOB_COMPLETED') {
                         toast.dismiss(`job-${data.job_id}`);
-                        toast.success(`🎉 Job #${data.job_id} completed! Payment confirmed on blockchain.`, {
-                            duration: 5000,
-                            position: 'top-right',
-                        });
+                        const { gas, usd } = formatGasWithUSD(data.amount || 0);
+                        showPaymentConfirmed(gas, usd, data.job_id, data.tx_hash);
                         // Auto-refresh data to update UI (use ref to avoid stale closure)
                         fetchDataRef.current();
                     } else if (data.type === 'PAYMENT_PENDING') {

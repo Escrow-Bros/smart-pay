@@ -10,6 +10,8 @@ import { apiClient } from '@/lib/api';
 import { usdToGas, formatGasWithUSD } from '@/lib/currency';
 import type { UploadedImage } from '@/lib/types';
 import toast from 'react-hot-toast';
+import { showPaymentSent } from '@/components/PaymentToast';
+import { FileText, MapPin, DollarSign, Image, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -260,11 +262,11 @@ export default function ConversationalJobCreator() {
       });
 
       const ipfsUrls: string[] = [];
-      
+
       for (let idx = 0; idx < state.clientUploadedImages.length; idx++) {
         const img = state.clientUploadedImages[idx];
         console.log(`[JobCreator] Uploading image ${idx + 1}/${state.clientUploadedImages.length} to IPFS:`, img.file.name);
-        
+
         try {
           const url = await apiClient.uploadToIpfs(img.file);
           console.log(`[JobCreator] ✅ Image ${idx + 1} uploaded successfully:`, url);
@@ -276,9 +278,9 @@ export default function ConversationalJobCreator() {
           throw new Error(`Image upload failed: ${errorMsg}`);
         }
       }
-      
+
       console.log('[JobCreator] All IPFS uploads complete:', ipfsUrls);
-      
+
       if (ipfsUrls.length === 0) {
         throw new Error('No images were uploaded successfully');
       }
@@ -317,16 +319,8 @@ export default function ConversationalJobCreator() {
       const result = await apiClient.createJob(payload);
 
       if (result.job) {
-        const originalAmount = extractedData.price_amount || paymentAmount;
-        const currency = extractedData.price_currency?.toUpperCase() || 'GAS';
-        const displayAmount = currency === 'USD'
-          ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)`
-          : `${paymentAmount.toFixed(2)} GAS`;
-
-        toast.success(`🎉 Job #${result.job.job_id} created successfully! Payment: ${displayAmount}`, {
-          duration: 5000,
-          position: 'top-center',
-        });
+        const { gas, usd } = formatGasWithUSD(paymentAmount);
+        showPaymentSent(gas, usd, result.job.job_id, result.job.tx_hash);
 
         // Auto-refresh client jobs data
         await fetchData();
@@ -363,7 +357,7 @@ export default function ConversationalJobCreator() {
     } catch (error) {
       console.error('Create error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      
+
       // Don't show generic error if we already showed specific upload error
       if (!errorMsg.includes('Image upload failed')) {
         toast.error(`❌ Failed to create job: ${errorMsg}`);
@@ -373,16 +367,55 @@ export default function ConversationalJobCreator() {
     }
   };
 
+  // Step progress calculation
+  const steps = [
+    { id: 'task', label: 'Task', icon: FileText, complete: !!extractedData.task },
+    { id: 'location', label: 'Location', icon: MapPin, complete: !!extractedData.location },
+    { id: 'price', label: 'Price', icon: DollarSign, complete: !!extractedData.price_amount },
+    { id: 'image', label: 'Photo', icon: Image, complete: state.clientUploadedImages.length > 0 },
+  ];
+  const completedSteps = steps.filter(s => s.complete).length;
+
   return (
-    <div className="animate-in fade-in duration-500 h-full flex flex-col">
+    <div className="animate-fade-in-up h-full flex flex-col">
       {/* Header Section */}
-      <div className="mb-3 sm:mb-4 px-1">
-        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-1 sm:mb-2">
-          Create Job (AI Assistant)
-        </h2>
-        <p className="text-sm sm:text-base text-slate-400">
-          Chat with our AI to create your blockchain-secured gig posting.
-        </p>
+      <div className="mb-4 px-1">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20">
+            <Sparkles className="w-6 h-6 text-cyan-400" />
+          </div>
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white">
+              Create Job
+            </h2>
+            <p className="text-sm text-slate-400">AI-Assisted Job Posting</p>
+          </div>
+        </div>
+
+        {/* Step Progress */}
+        <div className="flex items-center gap-2 mt-4">
+          {steps.map((step, idx) => (
+            <div key={step.id} className="flex items-center gap-2">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${step.complete
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-slate-800/50 text-slate-500 border border-slate-700'
+                }`}>
+                {step.complete ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : (
+                  <step.icon className="w-3.5 h-3.5" />
+                )}
+                <span className="hidden sm:inline">{step.label}</span>
+              </div>
+              {idx < steps.length - 1 && (
+                <div className={`w-4 h-0.5 ${step.complete ? 'bg-green-500/50' : 'bg-slate-700'}`} />
+              )}
+            </div>
+          ))}
+          <span className="ml-auto text-xs text-slate-500">
+            {completedSteps}/{steps.length}
+          </span>
+        </div>
       </div>
 
       <div className="flex-1 bg-slate-950/50 rounded-2xl sm:rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
@@ -486,6 +519,8 @@ export default function ConversationalJobCreator() {
                 images={state.clientUploadedImages}
                 onAdd={handleImageUpload}
                 onRemove={removeUploadedImage}
+                maxImages={4}
+                label="Reference Photos"
               />
 
               <LocationPicker
@@ -498,14 +533,27 @@ export default function ConversationalJobCreator() {
 
         {/* Create Button */}
         {isComplete && (
-          <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 bg-gradient-to-r from-green-500/10 to-cyan-500/10 border-t border-green-500/30">
+          <div className="px-3 sm:px-4 md:px-6 py-4 bg-gradient-to-r from-green-500/10 to-cyan-500/10 border-t border-green-500/30">
             <button
               onClick={handleCreateJob}
               disabled={isCreating}
-              className="w-full bg-gradient-to-r from-green-500 to-cyan-600 text-white font-semibold py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl text-sm sm:text-base hover:shadow-lg hover:shadow-green-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] touch-manipulation"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-cyan-600 text-white font-semibold py-3.5 px-6 rounded-xl text-base hover:shadow-lg hover:shadow-green-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed min-h-[52px] touch-manipulation"
             >
-              {isCreating ? 'Creating Job...' : '✓ Create Job on Blockchain'}
+              {isCreating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Creating Job on Blockchain...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Create Job on Blockchain
+                </>
+              )}
             </button>
+            <p className="text-center text-xs text-slate-500 mt-2">
+              This will upload images to IPFS and create a blockchain transaction
+            </p>
           </div>
         )}
 
