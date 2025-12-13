@@ -28,6 +28,7 @@ export default function ImageUpload({
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const mountedRef = useRef(true);
+    const dialogRef = useRef<HTMLDivElement>(null);
 
     // Track component mount status
     useEffect(() => {
@@ -46,6 +47,13 @@ export default function ImageUpload({
         };
     }, []);
 
+    // Bind stream to video element when modal opens
+    useEffect(() => {
+        if (isCameraOpen && videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current;
+        }
+    }, [isCameraOpen]);
+
     // Handle escape key and focus trap
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -57,12 +65,14 @@ export default function ImageUpload({
             }
 
             if (e.key === 'Tab') {
-                const modal = document.querySelector('[role="dialog"]');
+                const modal = dialogRef.current;
                 if (!modal) return;
 
                 const focusableElements = modal.querySelectorAll(
                     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
                 );
+                if (focusableElements.length === 0) return;
+
                 const firstElement = focusableElements[0] as HTMLElement;
                 const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
@@ -88,8 +98,7 @@ export default function ImageUpload({
 
             // Focus first element when modal opens
             setTimeout(() => {
-                const modal = document.querySelector('[role="dialog"]');
-                const firstButton = modal?.querySelector('button') as HTMLElement;
+                const firstButton = dialogRef.current?.querySelector('button') as HTMLElement | null;
                 firstButton?.focus();
             }, 50);
 
@@ -246,9 +255,6 @@ export default function ImageUpload({
             }
 
             streamRef.current = stream;
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-            }
             setIsCameraOpen(true);
         } catch (err) {
             console.error("Error accessing camera:", err);
@@ -330,14 +336,25 @@ export default function ImageUpload({
                 {/* Upload Button */}
                 {!isAtLimit && (
                     <div className="relative group aspect-square">
-                        <div
+                        <input
+                            type="file"
+                            accept="image/*"
+                            multiple
                             className={`
-                                w-full h-full rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center gap-3
+                                absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10
+                                rounded-2xl border-2 border-dashed transition-all duration-300
                                 ${isDragging
                                     ? 'border-cyan-500 bg-cyan-500/10 scale-95'
                                     : 'border-slate-700 bg-slate-800/30 hover:border-cyan-500/50 hover:bg-slate-800/50'
                                 }
                             `}
+                            aria-label="Add images"
+                            onChange={(e) => {
+                                if (e.target.files) {
+                                    processFiles(e.target.files);
+                                    e.target.value = ''; // Reset
+                                }
+                            }}
                             onDragOver={(e) => {
                                 e.preventDefault();
                                 setIsDragging(true);
@@ -348,20 +365,16 @@ export default function ImageUpload({
                                 setIsDragging(false);
                                 processFiles(e.dataTransfer.files);
                             }}
+                        />
+                        <div
+                            className={`
+                                w-full h-full rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center gap-3
+                                ${isDragging
+                                    ? 'border-cyan-500 bg-cyan-500/10 scale-95'
+                                    : 'border-slate-700 bg-slate-800/30 hover:border-cyan-500/50 hover:bg-slate-800/50'
+                                }
+                            `}
                         >
-                            <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                aria-label="Add images"
-                                onChange={(e) => {
-                                    if (e.target.files) {
-                                        processFiles(e.target.files);
-                                        e.target.value = ''; // Reset
-                                    }
-                                }}
-                            />
                             <div className="p-3 bg-slate-800 rounded-full group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-black/20">
                                 <ImagePlus className="w-6 h-6 text-cyan-400" />
                             </div>
@@ -426,6 +439,7 @@ export default function ImageUpload({
             {
                 isCameraOpen && (
                     <div
+                        ref={dialogRef}
                         className="fixed inset-0 z-50 bg-black flex flex-col"
                         role="dialog"
                         aria-modal="true"
