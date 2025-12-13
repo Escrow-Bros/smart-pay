@@ -1,4 +1,5 @@
 import { useState, KeyboardEvent, useRef } from 'react';
+import { Send } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -6,10 +7,10 @@ interface ChatInputProps {
   placeholder?: string;
 }
 
-export default function ChatInput({ 
-  onSend, 
-  disabled = false, 
-  placeholder = 'Type your message...' 
+export default function ChatInput({
+  onSend,
+  disabled = false,
+  placeholder = 'Type your message...'
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -53,26 +54,14 @@ export default function ChatInput({
           target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
         }}
       />
-      
+
       <button
         onClick={handleSend}
         disabled={!input.trim() || disabled}
         aria-label="Send message"
         className="flex-shrink-0 bg-gradient-to-r from-cyan-500 to-blue-600 text-white p-2.5 sm:p-3 rounded-lg sm:rounded-xl hover:shadow-lg hover:shadow-cyan-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none min-h-[44px] min-w-[44px] touch-manipulation flex items-center justify-center"
       >
-        <svg 
-          className="w-4 h-4 sm:w-5 sm:h-5" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" 
-          />
-        </svg>
+        <Send className="w-4 h-4 sm:w-5 sm:h-5" />
       </button>
     </div>
   );

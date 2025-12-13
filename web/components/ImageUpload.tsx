@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { UploadedImage } from '@/lib/types';
 import toast from 'react-hot-toast';
+import { ImagePlus, X, Image } from 'lucide-react';
 
 interface ImageUploadProps {
     images: UploadedImage[];
@@ -24,7 +25,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
             // Read and optimize ALL images
             const reader = new FileReader();
             reader.onload = () => {
-                const img = new Image();
+                const img = new window.Image();
                 img.onload = () => {
                     // Resize if too large (max 1600x1600 for good quality vs token balance)
                     const MAX_DIMENSION = 1600;
@@ -58,7 +59,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                             if (!blob) {
                                 // Blob creation failed, try fallback with toDataURL
                                 console.error(`Failed to create blob for "${file.name}". Attempting fallback...`);
-                                
+
                                 try {
                                     // Fallback: convert data URL to Blob
                                     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
@@ -87,20 +88,20 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                                 }
                                 return; // Terminate processing
                             }
-                            
+
                             // Success: blob created normally
                             const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
                                 type: 'image/jpeg',
                             });
                             const preview = canvas.toDataURL('image/jpeg', 0.85);
-                            
+
                             // Show size reduction if significant
                             const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
                             const optimizedSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
                             if (file.size > blob.size * 1.5) {
                                 console.log(`✅ Optimized ${file.name}: ${originalSizeMB}MB → ${optimizedSizeMB}MB`);
                             }
-                            
+
                             onAdd({
                                 file: optimizedFile,
                                 preview,
@@ -111,14 +112,8 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                     );
                 };
                 img.onerror = () => {
-                    // Log error for diagnostics
                     console.error(`Failed to load image: "${file.name}". The file may be corrupted or in an unsupported format.`);
-                    
-                    // Surface error to user
                     toast.error(`Failed to load "${file.name}". The image may be corrupted or in an unsupported format.`);
-                    
-                    // Clean up: img element will be garbage collected
-                    // File is not added to the upload list, preventing silent failures
                 };
                 img.src = reader.result as string;
             };
@@ -133,9 +128,9 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files) return;
-        
+
         processFiles(files);
-        
+
         // Reset input
         e.target.value = '';
     };
@@ -157,7 +152,7 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 className={`border-2 border-dashed rounded-xl sm:rounded-2xl p-6 sm:p-8 md:p-10 transition-all cursor-pointer ${isDragging
-                    ? 'border-cyan-500 bg-slate-900/50'
+                    ? 'border-cyan-500 bg-cyan-500/5'
                     : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50'
                     }`}
             >
@@ -169,50 +164,54 @@ export default function ImageUpload({ images, onAdd, onRemove }: ImageUploadProp
                         onChange={handleFileChange}
                         className="hidden"
                     />
-                    <svg className="h-10 w-10 sm:h-12 sm:w-12 text-slate-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                    <div className={`p-4 rounded-full mb-4 transition-colors ${isDragging ? 'bg-cyan-500/20' : 'bg-slate-800'}`}>
+                        <ImagePlus className={`h-8 w-8 sm:h-10 sm:w-10 ${isDragging ? 'text-cyan-400' : 'text-slate-500'}`} />
+                    </div>
                     <p className="text-slate-400 text-sm sm:text-base text-center mb-2">
                         Drop reference images here or click to select
                     </p>
                     <p className="text-slate-600 text-xs text-center">
-                        Auto-optimized for AI
+                        Auto-optimized for AI verification
                     </p>
                 </label>
             </div>
-            <p className="text-xs sm:text-sm text-gray-400 mt-3 text-center">
-                All images auto-resized to 1600px & compressed (85% quality) for optimal AI processing
+            <p className="text-xs sm:text-sm text-slate-500 mt-3 text-center">
+                Images auto-resized to 1600px & compressed for optimal AI processing
             </p>
 
             {images.length > 0 && (
                 <div className="mt-4">
-                    <p className="text-sm font-medium text-slate-300 mb-3 text-center">
-                        Uploaded Images ({images.length})
+                    <p className="text-sm font-medium text-slate-300 mb-3 text-center flex items-center justify-center gap-2">
+                        <Image className="w-4 h-4 text-green-400" />
+                        Uploaded ({images.length})
                     </p>
-                    {images.map((img, index) => (
-                        <div
-                            key={index}
-                            className="flex items-center mt-2 sm:mt-3 p-2.5 sm:p-3 bg-slate-900 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors"
-                        >
-                            <img
-                                src={img.preview}
-                                alt="Preview"
-                                className="h-9 w-9 sm:h-10 sm:w-10 object-cover rounded mr-2 sm:mr-3 flex-shrink-0"
-                            />
-                            <span className="text-slate-300 text-xs sm:text-sm flex-1 truncate min-w-0">
-                                {img.file.name}
-                            </span>
-                            <button
-                                onClick={() => onRemove(index)}
-                                className="ml-2 p-1.5 hover:bg-red-500/10 rounded transition-colors flex-shrink-0 min-h-[32px] min-w-[32px] touch-manipulation flex items-center justify-center"
-                                aria-label="Remove image"
+                    <div className="space-y-2">
+                        {images.map((img, index) => (
+                            <div
+                                key={index}
+                                className="flex items-center p-2.5 sm:p-3 glass border border-slate-700 rounded-xl hover:border-slate-600 transition-colors group"
                             >
-                                <svg className="h-4 w-4 text-red-400 hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                    ))}
+                                <img
+                                    src={img.preview}
+                                    alt="Preview"
+                                    className="h-12 w-12 sm:h-14 sm:w-14 object-cover rounded-lg mr-3 flex-shrink-0"
+                                />
+                                <span className="text-slate-300 text-xs sm:text-sm flex-1 truncate min-w-0">
+                                    {img.file.name}
+                                </span>
+                                <span className="text-slate-500 text-xs mr-2">
+                                    {(img.file.size / 1024).toFixed(0)}KB
+                                </span>
+                                <button
+                                    onClick={() => onRemove(index)}
+                                    className="p-2 hover:bg-red-500/20 rounded-lg transition-colors flex-shrink-0 min-h-[36px] min-w-[36px] touch-manipulation flex items-center justify-center opacity-60 group-hover:opacity-100"
+                                    aria-label="Remove image"
+                                >
+                                    <X className="h-4 w-4 text-red-400 hover:text-red-300" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

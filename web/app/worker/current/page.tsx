@@ -7,6 +7,11 @@ import ImageUpload from '@/components/ImageUpload';
 import { JobDict, UploadedImage } from '@/lib/types';
 import { formatGasWithUSD } from '@/lib/currency';
 import toast from 'react-hot-toast';
+import {
+    MapPin, Loader2, ExternalLink, ClipboardCheck, CheckCircle2, Clock,
+    AlertCircle, Eye, X, Info, MapPinned, Briefcase, RefreshCw, Shield,
+    Send, Lightbulb, AlertTriangle, CheckCircle, XCircle, Timer
+} from 'lucide-react';
 
 interface TimelineStage {
     id: string;
@@ -56,15 +61,18 @@ export default function WorkerCurrentJobPage() {
     // If no jobs, show empty state
     if (!state.currentJobs || state.currentJobs.length === 0) {
         return (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-fade-in-up">
                 <div className="mb-8">
                     <h2 className="text-3xl font-bold text-white mb-2">Current Jobs</h2>
                     <p className="text-slate-400">Your active job assignments.</p>
                 </div>
 
-                <div className="text-center py-12 bg-slate-900/30 border border-slate-800 rounded-xl">
-                    <p className="text-slate-400 mb-2">No active jobs</p>
-                    <p className="text-slate-500 text-sm">Claim a job from the Available Jobs page to start working.</p>
+                <div className="text-center py-16 glass border border-slate-800 rounded-2xl">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/50 flex items-center justify-center">
+                        <Briefcase className="w-8 h-8 text-slate-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">No active jobs</h3>
+                    <p className="text-slate-400">Claim a job from Available Jobs to start working.</p>
                 </div>
             </div>
         );
@@ -314,7 +322,7 @@ export default function WorkerCurrentJobPage() {
     };
 
     return (
-        <div className="animate-in fade-in duration-500">
+        <div className="animate-fade-in-up">
             <div className="mb-8">
                 <h2 className="text-3xl font-bold text-white mb-2">Current Jobs</h2>
                 <p className="text-slate-400">Complete your work and submit proof to get paid.</p>
@@ -388,21 +396,17 @@ export default function WorkerCurrentJobPage() {
                             <p className="text-slate-200 mb-4">{activeJob.description}</p>
 
                             {activeJob.location && (
-                                <div className="flex items-center mb-3">
-                                    <svg className="h-5 w-5 text-slate-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    </svg>
+                                <div className="flex items-center mb-3 text-slate-400">
+                                    <MapPin className="h-5 w-5 mr-2 text-slate-500" />
                                     <span className="text-slate-300">{activeJob.location}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* Verification Plan */}
-                        <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-800 mb-6">
-                            <h3 className="text-white font-semibold mb-4 flex items-center">
-                                <svg className="w-5 h-5 mr-2 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                        <div className="glass border border-slate-800 rounded-2xl p-6 mb-6">
+                            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                                <ClipboardCheck className="w-5 h-5 text-cyan-500" />
                                 Verification Plan
                             </h3>
 
@@ -503,10 +507,10 @@ export default function WorkerCurrentJobPage() {
                                             {/* Icon */}
                                             <div className="flex flex-col items-center">
                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all ${stage.status === 'completed'
-                                                        ? 'bg-green-500/20 text-green-400 border-2 border-green-500'
-                                                        : stage.status === 'current'
-                                                            ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500 animate-pulse'
-                                                            : 'bg-slate-800/50 text-slate-600 border-2 border-slate-700'
+                                                    ? 'bg-green-500/20 text-green-400 border-2 border-green-500'
+                                                    : stage.status === 'current'
+                                                        ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500 animate-pulse'
+                                                        : 'bg-slate-800/50 text-slate-600 border-2 border-slate-700'
                                                     }`}>
                                                     {stage.icon}
                                                 </div>
@@ -519,14 +523,14 @@ export default function WorkerCurrentJobPage() {
                                             {/* Content */}
                                             <div className="flex-1 pb-4">
                                                 <h4 className={`font-medium mb-1 ${stage.status === 'completed' ? 'text-green-400' :
-                                                        stage.status === 'current' ? 'text-blue-400' :
-                                                            'text-slate-500'
+                                                    stage.status === 'current' ? 'text-blue-400' :
+                                                        'text-slate-500'
                                                     }`}>
                                                     {stage.label}
                                                 </h4>
                                                 <p className={`text-sm ${stage.status === 'completed' ? 'text-slate-400' :
-                                                        stage.status === 'current' ? 'text-slate-300' :
-                                                            'text-slate-600'
+                                                    stage.status === 'current' ? 'text-slate-300' :
+                                                        'text-slate-600'
                                                     }`}>
                                                     {stage.description}
                                                 </p>
@@ -592,8 +596,8 @@ export default function WorkerCurrentJobPage() {
                                                 {stage.id === 'verification' && activeJob.verification_summary && (
                                                     <div className="mt-2 space-y-2">
                                                         <div className={`p-3 rounded-lg text-sm ${activeJob.verification_summary.verified
-                                                                ? 'bg-green-900/20 border border-green-800 text-green-300'
-                                                                : 'bg-red-900/20 border border-red-800 text-red-300'
+                                                            ? 'bg-green-900/20 border border-green-800 text-green-300'
+                                                            : 'bg-red-900/20 border border-red-800 text-red-300'
                                                             }`}>
                                                             {activeJob.verification_summary.verdict}
                                                         </div>
@@ -622,7 +626,8 @@ export default function WorkerCurrentJobPage() {
                         {/* Show submission form if job is IN_PROGRESS or DISPUTED (allow resubmission) */}
                         {(activeJob.status === 'IN_PROGRESS' || activeJob.status === 'DISPUTED') && (
                             <div className="border-t border-slate-700 pt-6">
-                                <h3 className="text-white font-semibold mb-3">
+                                <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                    <Send className="w-5 h-5 text-cyan-400" />
                                     {activeJob.status === 'DISPUTED' ? 'Resubmit Proof of Completion' : 'Submit Proof of Completion'}
                                 </h3>
                                 <p className="text-slate-400 text-sm mb-4">
@@ -640,12 +645,22 @@ export default function WorkerCurrentJobPage() {
                                 <button
                                     onClick={handleSubmit}
                                     disabled={isSubmitting || proofImages.length === 0}
-                                    className={`w-full mt-4 font-semibold py-3 rounded-xl transition-all active:scale-95 ${isSubmitting || proofImages.length === 0
+                                    className={`w-full mt-4 flex items-center justify-center gap-2 font-semibold py-3.5 rounded-xl transition-all active:scale-95 ${isSubmitting || proofImages.length === 0
                                         ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                        : 'bg-green-600 hover:bg-green-500 text-white'
+                                        : 'bg-gradient-to-r from-green-600 to-cyan-600 hover:from-green-500 hover:to-cyan-500 text-white hover:shadow-lg hover:shadow-green-500/30'
                                         }`}
                                 >
-                                    {isSubmitting ? 'Submitting...' : 'Submit for Verification'}
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Submitting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="w-5 h-5" />
+                                            Submit for Verification
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         )}
@@ -693,10 +708,10 @@ export default function WorkerCurrentJobPage() {
                                         <div
                                             key={index}
                                             className={`animate-in slide-in-from-left duration-300 ${isHeader
-                                                    ? 'font-semibold text-white text-base mt-4 first:mt-0'
-                                                    : isSubItem
-                                                        ? 'text-slate-300 text-sm ml-4 pl-4 border-l-2 border-slate-700'
-                                                        : 'text-slate-300 text-sm'
+                                                ? 'font-semibold text-white text-base mt-4 first:mt-0'
+                                                : isSubItem
+                                                    ? 'text-slate-300 text-sm ml-4 pl-4 border-l-2 border-slate-700'
+                                                    : 'text-slate-300 text-sm'
                                                 } ${isSuccess ? 'text-green-400' : isError ? 'text-red-400' : ''
                                                 }`}
                                             style={{ animationDelay: `${index * 50}ms` }}
@@ -710,8 +725,8 @@ export default function WorkerCurrentJobPage() {
                             {/* Summary Card */}
                             {activeJob.verification_summary && (
                                 <div className={`mt-6 p-4 rounded-xl border-2 ${activeJob.verification_summary.verified
-                                        ? 'bg-green-900/20 border-green-700'
-                                        : 'bg-red-900/20 border-red-700'
+                                    ? 'bg-green-900/20 border-green-700'
+                                    : 'bg-red-900/20 border-red-700'
                                     }`}>
                                     <div className="flex items-start justify-between mb-3">
                                         <div>
@@ -724,8 +739,8 @@ export default function WorkerCurrentJobPage() {
                                             </p>
                                         </div>
                                         <div className={`px-3 py-1 rounded-full font-bold ${activeJob.verification_summary.verified
-                                                ? 'bg-green-500/20 text-green-400'
-                                                : 'bg-red-500/20 text-red-400'
+                                            ? 'bg-green-500/20 text-green-400'
+                                            : 'bg-red-500/20 text-red-400'
                                             }`}>
                                             {activeJob.verification_summary.score}/10
                                         </div>
