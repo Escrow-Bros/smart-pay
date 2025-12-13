@@ -200,7 +200,7 @@ def get_job_longitude(job_id: int) -> int:
 
 @public
 def get_agent_addr() -> UInt160:
-    """Get the current agent (AI Tribunal) address"""
+    """Get the current agent (Admin Tribunal) address"""
     return get_uint160(b'agent_addr')
 
 @public
@@ -244,7 +244,7 @@ def set_owner(new_owner: UInt160) -> bool:
 @public
 def set_agent(agent: UInt160) -> bool:
     """
-    Set the agent (AI Tribunal Banker) address.
+    Set the agent (Admin Tribunal Banker) address.
     Only callable by contract owner.
     
     :param agent: Address of the agent wallet
@@ -324,8 +324,8 @@ def assign_worker(job_id: int, worker: UInt160) -> bool:
 @public
 def release_funds(job_id: int) -> bool:
     """
-    Release funds to worker and treasury after AI Tribunal verification.
-    Only callable by the agent (AI Tribunal Banker).
+    Release funds to worker and treasury after Admin Tribunal verification.
+    Only callable by the agent (Admin Tribunal Banker).
     
     :param job_id: The job to settle
     :return: True if successful

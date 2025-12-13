@@ -38,7 +38,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
             <div className="md:hidden relative glass border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-40">
                 <div className="flex items-center gap-2">
                     <Scale className="w-5 h-5 text-purple-400" />
-                    <span className="text-lg font-bold text-white">AI Tribunal</span>
+                    <span className="text-lg font-bold text-white">Admin Tribunal</span>
                 </div>
                 <button
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -71,7 +71,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
                 <div className="p-6 border-b border-slate-800">
                     <div className="flex items-center gap-2 mb-2">
                         <Scale className="w-5 h-5 text-purple-400" />
-                        <span className="text-lg font-bold text-white">AI Tribunal</span>
+                        <span className="text-lg font-bold text-white">Admin Tribunal</span>
                     </div>
                     <span className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-semibold rounded-full">
                         ADMIN
@@ -121,7 +121,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
                                     <Scale className="w-5 h-5 text-purple-400" />
                                 </div>
                                 <div>
-                                    <h1 className="text-xl font-bold text-white">AI Tribunal</h1>
+                                    <h1 className="text-xl font-bold text-white">Admin Tribunal</h1>
                                     <p className="text-xs text-slate-500">Dispute Resolution System</p>
                                 </div>
                             </div>
