@@ -83,8 +83,8 @@ export default function WorkerCurrentJobPage() {
         return (
             <div className="animate-fade-in-up">
                 <div className="mb-8">
-                    <h2 className="text-3xl font-bold text-white mb-2">Current Jobs</h2>
-                    <p className="text-slate-400">Your active job assignments.</p>
+                    <h2 className="text-4xl font-bold text-white mb-2">Current Jobs</h2>
+                    <p className="text-slate-400 text-base">Your active job assignments.</p>
                 </div>
 
                 <div className="text-center py-16 glass border border-slate-800 rounded-2xl">
@@ -385,11 +385,11 @@ export default function WorkerCurrentJobPage() {
     return (
         <div className="animate-fade-in-up">
             <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Current Jobs</h2>
-                <p className="text-slate-400">Complete your work and submit proof to get paid.</p>
+                <h2 className="text-4xl font-bold text-white mb-2">Current Jobs</h2>
+                <p className="text-slate-400 text-base">Complete your work and submit proof to get paid.</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Job List Sidebar */}
                 <div className="lg:col-span-1 space-y-4">
                     {state.currentJobs.map((job) => {
@@ -426,8 +426,8 @@ export default function WorkerCurrentJobPage() {
                 </div>
 
                 {/* Active Job Details */}
-                <div className="lg:col-span-2">
-                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-8">
+                <div className="lg:col-span-3">
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-8 md:p-10 xl:p-12">
                         <div className="mb-6">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-3">
@@ -454,83 +454,98 @@ export default function WorkerCurrentJobPage() {
                                 </div>
                             </div>
 
-                            <p className="text-slate-200 mb-4">{activeJob.description}</p>
+                            <p className="text-slate-200 text-base mb-5">{activeJob.description}</p>
 
                             {activeJob.location && (
-                                <div className="flex items-center mb-3 text-slate-400">
+                                <div className="flex items-center mb-4 text-slate-400">
                                     <MapPin className="h-5 w-5 mr-2 text-slate-500" />
-                                    <span className="text-slate-300">{activeJob.location}</span>
+                                    <span className="text-slate-300 text-base">{activeJob.location}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* Verification Plan */}
-                        <div className="glass border border-slate-800 rounded-2xl p-6 mb-6">
-                            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                                <ClipboardCheck className="w-5 h-5 text-cyan-500" />
+                        <div className="glass border border-slate-800 rounded-2xl p-8 mb-8">
+                            <h3 className="text-white font-semibold text-xl mb-6 flex items-center gap-3">
+                                <ClipboardCheck className="w-6 h-6 text-cyan-500" />
                                 Verification Plan
                             </h3>
 
                             {activeJob.verification_plan ? (
-                                <div className="space-y-4">
+                                <div className="space-y-6">
                                     {/* Task Category */}
                                     {activeJob.verification_plan.task_category && (
-                                        <div className="mb-3">
-                                            <span className="inline-block px-3 py-1 bg-cyan-900/30 text-cyan-400 rounded-full text-xs font-medium border border-cyan-800">
+                                        <div className="mb-4">
+                                            <span className="inline-block px-4 py-2 bg-cyan-900/30 text-cyan-400 rounded-full text-sm font-medium border border-cyan-800">
                                                 {activeJob.verification_plan.task_category}
                                             </span>
                                         </div>
                                     )}
 
-                                    {/* Success Criteria */}
-                                    {activeJob.verification_plan.success_criteria && activeJob.verification_plan.success_criteria.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-medium text-green-400 mb-2 uppercase tracking-wider">✓ Success Criteria</h4>
-                                            <ul className="space-y-2">
-                                                {activeJob.verification_plan.success_criteria.map((item: string, i: number) => (
-                                                    <li key={i} className="flex items-start text-slate-300 text-sm">
-                                                        <span className="mr-2 text-green-500">•</span>
-                                                        {item}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
+                                    {/* Criteria Cards - Responsive Grid Layout */}
+                                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                                        {/* Success Criteria Card */}
+                                        {activeJob.verification_plan.success_criteria && activeJob.verification_plan.success_criteria.length > 0 && (
+                                            <div className="bg-green-500/5 border-2 border-green-500/30 rounded-xl p-6 hover:border-green-500/50 transition-all">
+                                                <h4 className="text-lg font-bold text-green-400 mb-4 uppercase tracking-wide flex items-center gap-2">
+                                                    <CheckCircle className="w-6 h-6" />
+                                                    Success Criteria
+                                                </h4>
+                                                <ul className="space-y-3">
+                                                    {activeJob.verification_plan.success_criteria.map((item: string, i: number) => (
+                                                        <li key={i} className="flex items-start text-slate-200 text-base leading-relaxed">
+                                                            <span className="mr-3 text-green-400 mt-0.5">✓</span>
+                                                            <span>{item}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
 
-                                    {/* Visual Checks */}
-                                    {activeJob.verification_plan.visual_checks && activeJob.verification_plan.visual_checks.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-medium text-cyan-400 mb-2 uppercase tracking-wider">👁️ Visual Checks</h4>
-                                            <ul className="space-y-2">
-                                                {activeJob.verification_plan.visual_checks.map((item: string, i: number) => (
-                                                    <li key={i} className="flex items-start text-slate-300 text-sm">
-                                                        <span className="mr-2 text-cyan-500">•</span>
-                                                        {item}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
+                                        {/* Visual Checks Card */}
+                                        {activeJob.verification_plan.visual_checks && activeJob.verification_plan.visual_checks.length > 0 && (
+                                            <div className="bg-cyan-500/5 border-2 border-cyan-500/30 rounded-xl p-6 hover:border-cyan-500/50 transition-all">
+                                                <h4 className="text-lg font-bold text-cyan-400 mb-4 uppercase tracking-wide flex items-center gap-2">
+                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    Visual Checks
+                                                </h4>
+                                                <ul className="space-y-3">
+                                                    {activeJob.verification_plan.visual_checks.map((item: string, i: number) => (
+                                                        <li key={i} className="flex items-start text-slate-200 text-base leading-relaxed">
+                                                            <span className="mr-3 text-cyan-400 mt-0.5">👁</span>
+                                                            <span>{item}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
 
-                                    {/* Rejection Criteria */}
-                                    {activeJob.verification_plan.rejection_criteria && activeJob.verification_plan.rejection_criteria.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-medium text-red-400 mb-2 uppercase tracking-wider">✗ Rejection Criteria</h4>
-                                            <ul className="space-y-2">
-                                                {activeJob.verification_plan.rejection_criteria.map((item: string, i: number) => (
-                                                    <li key={i} className="flex items-start text-slate-300 text-sm">
-                                                        <span className="mr-2 text-red-500">•</span>
-                                                        {item}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
+                                        {/* Rejection Criteria Card */}
+                                        {activeJob.verification_plan.rejection_criteria && activeJob.verification_plan.rejection_criteria.length > 0 && (
+                                            <div className="bg-red-500/5 border-2 border-red-500/30 rounded-xl p-6 hover:border-red-500/50 transition-all">
+                                                <h4 className="text-lg font-bold text-red-400 mb-4 uppercase tracking-wide flex items-center gap-2">
+                                                    <AlertTriangle className="w-6 h-6" />
+                                                    Rejection Criteria
+                                                </h4>
+                                                <ul className="space-y-3">
+                                                    {activeJob.verification_plan.rejection_criteria.map((item: string, i: number) => (
+                                                        <li key={i} className="flex items-start text-slate-200 text-base leading-relaxed">
+                                                            <span className="mr-3 text-red-400 mt-0.5">✗</span>
+                                                            <span>{item}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Additional Info */}
-                                    <div className="flex items-center gap-4 text-xs text-slate-400 pt-2 border-t border-slate-700">
+                                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400 pt-4 border-t border-slate-700">
                                         {activeJob.verification_plan.location_required && (
-                                            <span className="flex items-center gap-1">
+                                            <span className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                 </svg>
@@ -538,7 +553,7 @@ export default function WorkerCurrentJobPage() {
                                             </span>
                                         )}
                                         {activeJob.verification_plan.comparison_mode && (
-                                            <span className="flex items-center gap-1">
+                                            <span className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                 </svg>
@@ -548,7 +563,7 @@ export default function WorkerCurrentJobPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-slate-400 text-sm italic">No verification plan available.</p>
+                                <p className="text-slate-400 text-base italic">No verification plan available.</p>
                             )}
                         </div>
 
@@ -687,11 +702,11 @@ export default function WorkerCurrentJobPage() {
                         {/* Show submission form if job is IN_PROGRESS or DISPUTED (allow resubmission) */}
                         {(activeJob.status === 'IN_PROGRESS' || activeJob.status === 'DISPUTED') && (
                             <div className="border-t border-slate-700 pt-6">
-                                <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                                    <Send className="w-5 h-5 text-cyan-400" />
+                                <h3 className="text-white font-semibold text-xl mb-4 flex items-center gap-2">
+                                    <Send className="w-6 h-6 text-cyan-400" />
                                     {activeJob.status === 'DISPUTED' ? 'Resubmit Proof of Completion' : 'Submit Proof of Completion'}
                                 </h3>
-                                <p className="text-slate-400 text-sm mb-4">
+                                <p className="text-slate-400 text-base mb-5">
                                     {activeJob.status === 'DISPUTED'
                                         ? 'Your previous submission was disputed. Please upload new photos addressing the issues.'
                                         : 'Upload photos showing the completed work to receive payment.'}

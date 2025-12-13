@@ -168,7 +168,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
             </nav>
 
             {/* Main Content */}
-            <main className="relative max-w-7xl mx-auto px-4 py-8">
+            <main className="relative max-w-7xl mx-auto px-6 sm:px-8 md:px-10 py-10 lg:py-12">
                 {children}
             </main>
         </div>

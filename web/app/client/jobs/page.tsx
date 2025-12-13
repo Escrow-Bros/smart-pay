@@ -24,14 +24,14 @@ export default function ClientJobsPage() {
         <div className="animate-fade-in-up">
             <div className="mb-8 flex justify-between items-center">
                 <div>
-                    <h2 className="text-3xl font-bold text-white mb-2">My Jobs</h2>
-                    <p className="text-slate-400">Track and manage your posted gigs.</p>
+                    <h2 className="text-4xl font-bold text-white mb-2">My Jobs</h2>
+                    <p className="text-slate-400 text-base">Track and manage your posted gigs.</p>
                 </div>
                 <Link
                     href="/client/create"
-                    className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30"
+                    className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30"
                 >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-5 h-5" />
                     New Job
                 </Link>
             </div>
@@ -67,7 +67,7 @@ export default function ClientJobsPage() {
                         return (
                             <div
                                 key={job.job_id}
-                                className={`group relative glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all duration-300 animate-fade-in-up ${staggerClass}`}
+                                className={`group relative glass border border-slate-800 rounded-2xl p-7 md:p-8 hover:border-cyan-500/50 hover-glow-cyan transition-all duration-300 animate-fade-in-up ${staggerClass}`}
                             >
                                 {/* Gradient overlay on hover */}
                                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
@@ -88,12 +88,12 @@ export default function ClientJobsPage() {
                                         </span>
                                     </div>
 
-                                    <p className="text-slate-300 text-sm mb-4 leading-relaxed">{job.description}</p>
+                                    <p className="text-slate-300 text-base mb-4 leading-relaxed">{job.description}</p>
 
                                     {job.location && (
                                         <div className="flex items-center mb-3 text-slate-400">
                                             <MapPin className="h-4 w-4 mr-1.5 text-slate-500" />
-                                            <span className="text-xs">{job.location}</span>
+                                            <span className="text-sm">{job.location}</span>
                                         </div>
                                     )}
 
@@ -102,19 +102,19 @@ export default function ClientJobsPage() {
                                         <div className="mb-4">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <Image className="w-4 h-4 text-slate-500" />
-                                                <span className="text-xs text-slate-400">{job.reference_photos.length} reference photo(s)</span>
+                                                <span className="text-sm text-slate-400">{job.reference_photos.length} reference photo(s)</span>
                                             </div>
                                             <div className="flex gap-2">
                                                 {job.reference_photos.slice(0, 3).map((photo, i) => (
                                                     <div
                                                         key={i}
-                                                        className="w-16 h-16 rounded-lg overflow-hidden border border-slate-700"
+                                                        className="w-20 h-20 rounded-lg overflow-hidden border border-slate-700"
                                                     >
                                                         <img
                                                             src={photo}
                                                             alt={`Reference ${i + 1}`}
-                                                            width={64}
-                                                            height={64}
+                                                            width={80}
+                                                            height={80}
                                                             loading="lazy"
                                                             decoding="async"
                                                             referrerPolicy="no-referrer"
@@ -123,7 +123,7 @@ export default function ClientJobsPage() {
                                                     </div>
                                                 ))}
                                                 {job.reference_photos.length > 3 && (
-                                                    <div className="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 text-xs">
+                                                    <div className="w-20 h-20 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 text-sm">
                                                         +{job.reference_photos.length - 3}
                                                     </div>
                                                 )}
@@ -163,8 +163,8 @@ export default function ClientJobsPage() {
                                     <div className="flex justify-between items-center pt-3 border-t border-slate-800">
                                         <div className="flex items-center gap-4">
                                             <div className="flex items-baseline gap-1">
-                                                <span className="text-cyan-400 font-semibold text-lg">{gas} GAS</span>
-                                                <span className="text-slate-500 text-sm">≈ {usd}</span>
+                                                <span className="text-cyan-400 font-semibold text-xl">{gas} GAS</span>
+                                                <span className="text-slate-500 text-base">≈ {usd}</span>
                                             </div>
                                             <div className="flex items-center text-slate-500 text-xs">
                                                 <Clock className="w-3.5 h-3.5 mr-1" />
