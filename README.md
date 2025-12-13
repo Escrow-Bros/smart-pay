@@ -1,6 +1,6 @@
 # GigSmartPay
 
-<img width="1046" height="558" alt="image" src="https://github.com/user-attachments/assets/fe16c104-6ba7-4718-8714-cdb955fd7bb8" />
+<img width="1512" height="741" alt="image" src="https://github.com/user-attachments/assets/35985bb2-cbec-455a-b6d3-9078f9c205e3" />
 
 **Decentralized Gig Platform on Neo N3 Blockchain**
 
