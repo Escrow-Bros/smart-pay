@@ -65,7 +65,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 transform transition-transform duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 w-64 md:w-64 bg-slate-900/95 md:bg-slate-900/50 md:border-r border-slate-800 flex flex-col
-                md:min-h-screen h-screen overflow-hidden
+                md:min-h-screen h-[100dvh] overflow-hidden
             `}>
                 <div className="p-6 border-b border-slate-800">
                     <Link href="/" className="text-2xl font-bold text-white flex items-center gap-2">
