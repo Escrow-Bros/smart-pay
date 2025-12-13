@@ -7,6 +7,7 @@ import ImageUpload from '@/components/ImageUpload';
 import { JobDict, UploadedImage } from '@/lib/types';
 import { formatGasWithUSD } from '@/lib/currency';
 import toast from 'react-hot-toast';
+import { showPaymentReceived } from '@/components/PaymentToast';
 import {
     MapPin, Loader2, ExternalLink, ClipboardCheck, CheckCircle2, Clock,
     AlertCircle, Eye, X, Info, MapPinned, Briefcase, RefreshCw, Shield,
@@ -279,10 +280,8 @@ export default function WorkerCurrentJobPage() {
             const result = await apiClient.submitProof(activeJob.job_id, ipfsUrls, workerLocation);
 
             if (result.success) {
-                toast.success('✅ Work approved! Payment transaction sent to blockchain. You\'ll be notified when it confirms.', {
-                    duration: 5000,
-                    position: 'top-center',
-                });
+                const { gas, usd } = formatGasWithUSD(activeJob.amount);
+                showPaymentReceived(gas, usd, activeJob.job_id);
                 setProofImages([]);
                 setSelectedJob(null);  // Clear selection to show updated job
                 await fetchData();  // Refresh to show PAYMENT_PENDING status

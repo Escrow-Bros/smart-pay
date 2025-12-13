@@ -10,6 +10,7 @@ import { apiClient } from '@/lib/api';
 import { usdToGas, formatGasWithUSD } from '@/lib/currency';
 import type { UploadedImage } from '@/lib/types';
 import toast from 'react-hot-toast';
+import { showPaymentSent } from '@/components/PaymentToast';
 import { FileText, MapPin, DollarSign, Image, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface Message {
@@ -318,16 +319,8 @@ export default function ConversationalJobCreator() {
       const result = await apiClient.createJob(payload);
 
       if (result.job) {
-        const originalAmount = extractedData.price_amount || paymentAmount;
-        const currency = extractedData.price_currency?.toUpperCase() || 'GAS';
-        const displayAmount = currency === 'USD'
-          ? `${originalAmount} USD (~${paymentAmount.toFixed(2)} GAS)`
-          : `${paymentAmount.toFixed(2)} GAS`;
-
-        toast.success(`🎉 Job #${result.job.job_id} created successfully! Payment: ${displayAmount}`, {
-          duration: 5000,
-          position: 'top-center',
-        });
+        const { gas, usd } = formatGasWithUSD(paymentAmount);
+        showPaymentSent(gas, usd, result.job.job_id, result.job.tx_hash);
 
         // Auto-refresh client jobs data
         await fetchData();
