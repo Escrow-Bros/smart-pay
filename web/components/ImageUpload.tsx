@@ -155,24 +155,6 @@ export default function ImageUpload({
         }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
-
-        processFiles(files);
-
-        // Reset input
-        e.target.value = '';
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (!isAtLimit) {
-            processFiles(e.dataTransfer.files);
-        }
-    };
-
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -241,59 +223,6 @@ export default function ImageUpload({
                     <Image className="w-3.5 h-3.5" />
                     {images.length}/{maxImages}
                 </div>
-            </div>
-
-            {/* Drop zone */}
-            <div
-                onDragOver={(e) => { e.preventDefault(); if (!isAtLimit) setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl sm:rounded-2xl p-6 sm:p-8 transition-all ${isAtLimit
-                    ? 'border-slate-700 bg-slate-900/30 cursor-not-allowed opacity-60'
-                    : isDragging
-                        ? 'border-cyan-500 bg-cyan-500/5 cursor-pointer'
-                        : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50 cursor-pointer'
-                    }`}
-            >
-                <label className={`flex flex-col items-center justify-center ${isAtLimit ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleFileChange}
-                        className="hidden"
-                        disabled={isAtLimit}
-                    />
-                    <div className={`p-4 rounded-full mb-4 transition-colors ${isAtLimit
-                        ? 'bg-slate-800/50'
-                        : isDragging ? 'bg-cyan-500/20' : 'bg-slate-800'
-                        }`}>
-                        {isAtLimit ? (
-                            <AlertCircle className="h-8 w-8 sm:h-10 sm:w-10 text-yellow-500" />
-                        ) : (
-                            <ImagePlus className={`h-8 w-8 sm:h-10 sm:w-10 ${isDragging ? 'text-cyan-400' : 'text-slate-500'}`} />
-                        )}
-                    </div>
-                    {isAtLimit ? (
-                        <>
-                            <p className="text-yellow-400 text-sm sm:text-base text-center mb-1 font-medium">
-                                Maximum {maxImages} images reached
-                            </p>
-                            <p className="text-slate-500 text-xs text-center">
-                                Remove an image to add more
-                            </p>
-                        </>
-                    ) : (
-                        <>
-                            <p className="text-slate-400 text-sm sm:text-base text-center mb-1">
-                                Drop images here or click to select
-                            </p>
-                            <p className="text-slate-600 text-xs text-center">
-                                {remainingSlots} slot{remainingSlots !== 1 ? 's' : ''} remaining • Auto-optimized for AI
-                            </p>
-                        </>
-                    )}
-                </label>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
