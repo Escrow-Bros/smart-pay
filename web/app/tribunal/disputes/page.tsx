@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { DisputeDict } from '@/lib/types';
+import { Search, Clock, Eye, CheckCircle2, ChevronRight, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 
 function DisputesContent() {
     const searchParams = useSearchParams();
@@ -55,12 +56,10 @@ function DisputesContent() {
     const applyFilters = () => {
         let filtered = [...disputes];
 
-        // Status filter
         if (activeFilter !== 'all') {
             filtered = filtered.filter(d => d.status === activeFilter.toUpperCase());
         }
 
-        // Search filter
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             filtered = filtered.filter(d =>
@@ -71,7 +70,6 @@ function DisputesContent() {
             );
         }
 
-        // Sort by most recent
         filtered.sort((a, b) => new Date(b.raised_at).getTime() - new Date(a.raised_at).getTime());
 
         setFilteredDisputes(filtered);
@@ -79,29 +77,31 @@ function DisputesContent() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500">Loading disputes...</div>
+            <div className="flex flex-col items-center justify-center h-64 animate-fade-in-up">
+                <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-4" />
+                <p className="text-slate-400">Loading disputes...</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in-up">
             {/* Error Banner */}
             {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="glass border border-red-500/30 bg-red-500/10 rounded-2xl p-4">
                     <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3">
-                            <span className="text-red-600 text-xl">⚠️</span>
+                            <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5" />
                             <div>
-                                <h3 className="text-sm font-semibold text-red-800 mb-1">Failed to Load Disputes</h3>
-                                <p className="text-sm text-red-700">{error}</p>
+                                <h3 className="text-sm font-semibold text-red-400 mb-1">Failed to Load Disputes</h3>
+                                <p className="text-sm text-slate-400">{error}</p>
                             </div>
                         </div>
                         <button
                             onClick={fetchDisputes}
-                            className="ml-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 text-sm font-medium rounded-lg transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium rounded-xl transition-colors"
                         >
+                            <RefreshCw className="w-4 h-4" />
                             Retry
                         </button>
                     </div>
@@ -109,21 +109,22 @@ function DisputesContent() {
             )}
 
             {/* Filters and Search */}
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="glass border border-slate-800 rounded-2xl p-4">
                 <div className="flex flex-col md:flex-row gap-4">
                     {/* Search */}
-                    <div className="flex-1">
+                    <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input
                             type="text"
                             placeholder="Search by job ID, reason, or address..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                         />
                     </div>
 
                     {/* Status Filters */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         <FilterButton
                             label="All"
                             count={disputes.length}
@@ -154,79 +155,53 @@ function DisputesContent() {
                     </div>
                 </div>
 
-                <div className="mt-3 text-sm text-gray-600">
+                <div className="mt-3 text-sm text-slate-500">
                     Showing {filteredDisputes.length} of {disputes.length} disputes
                 </div>
             </div>
 
             {/* Disputes List */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="glass border border-slate-800 rounded-2xl overflow-hidden">
                 {filteredDisputes.length === 0 ? (
-                    <div className="px-6 py-12 text-center text-gray-500">
-                        <div className="text-4xl mb-2">🔍</div>
-                        <p>No disputes found</p>
-                        <p className="text-sm mt-1">Try adjusting your filters or search query</p>
+                    <div className="px-6 py-16 text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/50 flex items-center justify-center">
+                            <Search className="w-8 h-8 text-slate-600" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-2">No disputes found</h3>
+                        <p className="text-slate-400">Try adjusting your filters or search query</p>
                     </div>
                 ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Dispute ID
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Job ID
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Reason
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Amount
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Raised At
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Action
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredDisputes.map((dispute) => (
-                                <tr key={dispute.dispute_id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        #{dispute.dispute_id}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        #{dispute.job_id}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <StatusBadge status={dispute.status} />
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                                        {dispute.reason}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {dispute.amount} GAS
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {new Date(dispute.raised_at).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <Link
-                                            href={`/tribunal/disputes/${dispute.dispute_id}`}
-                                            className="text-blue-600 hover:text-blue-900 font-medium"
-                                        >
-                                            View Details →
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="divide-y divide-slate-800">
+                        {filteredDisputes.map((dispute, index) => (
+                            <Link
+                                key={dispute.dispute_id}
+                                href={`/tribunal/disputes/${dispute.dispute_id}`}
+                                className={`group block px-6 py-5 hover:bg-slate-800/50 transition-all animate-fade-in-up stagger-${(index % 4) + 1}`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <span className="text-purple-400 font-semibold">#{dispute.dispute_id}</span>
+                                            <span className="text-slate-600">•</span>
+                                            <span className="text-sm text-slate-500">Job #{dispute.job_id}</span>
+                                            <StatusBadge status={dispute.status} />
+                                        </div>
+                                        <h3 className="text-sm font-medium text-white truncate mb-1 group-hover:text-purple-300 transition-colors">
+                                            {dispute.reason}
+                                        </h3>
+                                        <div className="flex items-center gap-4 text-xs text-slate-500">
+                                            <span>{dispute.amount} GAS</span>
+                                            <span>•</span>
+                                            <span>{new Date(dispute.raised_at).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="ml-4 flex-shrink-0">
+                                        <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>
@@ -246,17 +221,17 @@ function FilterButton({
     onClick: () => void;
     color?: string;
 }) {
-    const colorClasses = {
-        gray: isActive ? 'bg-gray-200 text-gray-900' : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-        red: isActive ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200',
-        yellow: isActive ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
-        green: isActive ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200',
-    }[color];
+    const colorClasses: Record<string, string> = {
+        gray: isActive ? 'bg-slate-600 text-white border-slate-500' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-slate-600',
+        red: isActive ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-red-500/50 hover:text-red-400',
+        yellow: isActive ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-yellow-500/50 hover:text-yellow-400',
+        green: isActive ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-green-500/50 hover:text-green-400',
+    };
 
     return (
         <button
             onClick={onClick}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${colorClasses}`}
+            className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${colorClasses[color]}`}
         >
             {label} ({count})
         </button>
@@ -264,14 +239,17 @@ function FilterButton({
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const colorClasses = {
-        PENDING: 'bg-red-100 text-red-800',
-        UNDER_REVIEW: 'bg-yellow-100 text-yellow-800',
-        RESOLVED: 'bg-green-100 text-green-800',
-    }[status] || 'bg-gray-100 text-gray-800';
+    const config: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+        PENDING: { bg: 'bg-red-500/20', text: 'text-red-400', icon: <Clock className="w-3 h-3" /> },
+        UNDER_REVIEW: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: <Eye className="w-3 h-3" /> },
+        RESOLVED: { bg: 'bg-green-500/20', text: 'text-green-400', icon: <CheckCircle2 className="w-3 h-3" /> },
+    };
+
+    const { bg, text, icon } = config[status] || { bg: 'bg-slate-700', text: 'text-slate-400', icon: null };
 
     return (
-        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClasses}`}>
+        <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${bg} ${text}`}>
+            {icon}
             {status.replace('_', ' ')}
         </span>
     );
@@ -280,8 +258,9 @@ function StatusBadge({ status }: { status: string }) {
 export default function AllDisputesPage() {
     return (
         <Suspense fallback={
-            <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500">Loading disputes...</div>
+            <div className="flex flex-col items-center justify-center h-64 animate-fade-in-up">
+                <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-4" />
+                <p className="text-slate-400">Loading disputes...</p>
             </div>
         }>
             <DisputesContent />
