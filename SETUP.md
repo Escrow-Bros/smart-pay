@@ -97,11 +97,11 @@ VAULT_CONTRACT_HASH=0x2c9090b5eb4639a6c27b0bfeaba4d7680ef89775
 OPENAI_API_KEY=your_key_here
 OPENAI_BASE_URL=https://sudoapp.dev/api/v1
 
-# IPFS Storage
-EVERLAND_BUCKET_NAME=super-pay
-EVERLAND_ACCESS_KEY=your_key
-EVERLAND_SECRET_KEY=your_secret
-EVERLAND_ENDPOINT=https://endpoint.4everland.co/
+# Pinata IPFS Storage
+PINATA_API_KEY=your_api_key
+PINATA_SECRET_KEY=your_secret_key
+PINATA_JWT=your_jwt_token
+PINATA_GROUP_ID=optional_group_id
 ```
 
 ## 📊 Console Logs to Expect

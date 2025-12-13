@@ -60,15 +60,15 @@ services:
       - key: GOOGLE_MAPS_API_KEY
         sync: false  # Add manually in Render dashboard
       
-      # 4Everland IPFS Storage
-      - key: EVERLAND_BUCKET_NAME
-        value: super-pay
-      - key: EVERLAND_ACCESS_KEY
+      # Pinata IPFS Storage
+      - key: PINATA_API_KEY
         sync: false  # Add manually in Render dashboard
-      - key: EVERLAND_SECRET_KEY
+      - key: PINATA_SECRET_KEY
         sync: false  # Add manually in Render dashboard
-      - key: EVERLAND_ENDPOINT
-        value: https://endpoint.4everland.co/
+      - key: PINATA_JWT
+        sync: false  # Add manually in Render dashboard
+      - key: PINATA_GROUP_ID
+        sync: false  # Add manually in Render dashboard
       
       # Database Configuration (Supabase PostgreSQL)
       - key: DATABASE_URL

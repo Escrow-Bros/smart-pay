@@ -1171,11 +1171,11 @@ async def upload_to_ipfs_endpoint(file: UploadFile = File(...)):
         print(f"   Generated filename: {filename}")
         
         # Check credentials
-        print(f"   Checking 4Everland credentials...")
-        bucket = os.getenv("EVERLAND_BUCKET_NAME")
-        access_key = os.getenv("EVERLAND_ACCESS_KEY")
-        has_secret = bool(os.getenv("EVERLAND_SECRET_KEY"))
-        print(f"   Bucket: {bucket}, Access Key: {access_key[:8]}..., Secret Key: {'✓' if has_secret else '✗'}")
+        print(f"   Checking Pinata credentials...")
+        pinata_key = os.getenv("PINATA_API_KEY")
+        has_secret = bool(os.getenv("PINATA_SECRET_KEY"))
+        has_jwt = bool(os.getenv("PINATA_JWT"))
+        print(f"   API Key: {pinata_key[:8] if pinata_key else 'None'}..., Secret: {'✓' if has_secret else '✗'}, JWT: {'✓' if has_jwt else '✗'}")
         
         print(f"   Calling upload_to_ipfs()...")
         ipfs_url = upload_to_ipfs(file_bytes, filename)
