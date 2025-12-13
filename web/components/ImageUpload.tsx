@@ -27,6 +27,15 @@ export default function ImageUpload({
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const mountedRef = useRef(true);
+
+    // Track component mount status
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
     // Cleanup stream on unmount
     useEffect(() => {
@@ -37,17 +46,57 @@ export default function ImageUpload({
         };
     }, []);
 
-    // Handle escape key to close camera
+    // Handle escape key and focus trap
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && isCameraOpen) {
+            if (!isCameraOpen) return;
+
+            if (e.key === 'Escape') {
                 stopCamera();
+                return;
+            }
+
+            if (e.key === 'Tab') {
+                const modal = document.querySelector('[role="dialog"]');
+                if (!modal) return;
+
+                const focusableElements = modal.querySelectorAll(
+                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                );
+                const firstElement = focusableElements[0] as HTMLElement;
+                const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+                if (e.shiftKey) {
+                    if (document.activeElement === firstElement) {
+                        e.preventDefault();
+                        lastElement.focus();
+                    }
+                } else {
+                    if (document.activeElement === lastElement) {
+                        e.preventDefault();
+                        firstElement.focus();
+                    }
+                }
             }
         };
 
+        let previousActiveElement: HTMLElement | null = null;
+
         if (isCameraOpen) {
+            previousActiveElement = document.activeElement as HTMLElement;
             window.addEventListener('keydown', handleKeyDown);
-            return () => window.removeEventListener('keydown', handleKeyDown);
+
+            // Focus first element when modal opens
+            setTimeout(() => {
+                const modal = document.querySelector('[role="dialog"]');
+                const firstButton = modal?.querySelector('button') as HTMLElement;
+                firstButton?.focus();
+            }, 50);
+
+            return () => {
+                window.removeEventListener('keydown', handleKeyDown);
+                previousActiveElement?.focus();
+            };
         }
     }, [isCameraOpen]);
 
@@ -189,6 +238,13 @@ export default function ImageUpload({
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'environment' } // Prefer rear camera on mobile
             });
+
+            // Check if component is still mounted
+            if (!mountedRef.current) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
+
             streamRef.current = stream;
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
@@ -228,7 +284,10 @@ export default function ImageUpload({
         canvas.width = videoRef.current.videoWidth;
         canvas.height = videoRef.current.videoHeight;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+            toast.error("Failed to access canvas context. Please try again.");
+            return;
+        }
 
         ctx.drawImage(videoRef.current, 0, 0);
 
@@ -295,13 +354,13 @@ export default function ImageUpload({
                                 accept="image/*"
                                 multiple
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                aria-label="Add images"
                                 onChange={(e) => {
                                     if (e.target.files) {
                                         processFiles(e.target.files);
                                         e.target.value = ''; // Reset
                                     }
                                 }}
-                                disabled={remainingSlots <= 0}
                             />
                             <div className="p-3 bg-slate-800 rounded-full group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-black/20">
                                 <ImagePlus className="w-6 h-6 text-cyan-400" />
