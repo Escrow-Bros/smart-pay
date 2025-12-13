@@ -7,6 +7,14 @@ import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#06b6d4',
+};
+
 export const metadata: Metadata = {
   title: 'GigSmartPay - Decentralized Gig Platform',
   description: 'AI-powered escrow system for trustless gig work on Neo N3',
@@ -20,12 +28,6 @@ export const metadata: Metadata = {
     icon: '/icons/icon-192x192.png',
     apple: '/icons/icon-192x192.png',
   },
-};
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  themeColor: '#06b6d4',
 };
 
 export default function RootLayout({
