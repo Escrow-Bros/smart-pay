@@ -77,6 +77,8 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
                         <img
                             src={photo}
                             alt={`Photo ${index + 1}`}
+                            width={80}
+                            height={80}
                             loading="lazy"
                             className="w-full h-full object-cover"
                         />
@@ -162,6 +164,8 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
                                     <img
                                         src={photo}
                                         alt={`Thumbnail ${index + 1}`}
+                                        width={48}
+                                        height={48}
                                         className="w-full h-full object-cover"
                                     />
                                 </button>

@@ -51,7 +51,7 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
                                 <h3 className="text-lg font-bold text-white">
                                     {messages[type]}
                                 </h3>
-                                <Sparkles className="w-4 h-4 text-yellow-400 animate-spin-slow" />
+                                <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
                             </div>
 
                             {jobId && (

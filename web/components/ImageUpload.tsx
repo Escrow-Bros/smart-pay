@@ -98,33 +98,9 @@ export default function ImageUpload({
                     canvas.toBlob(
                         (blob) => {
                             if (!blob) {
-                                console.error(`Failed to create blob for "${file.name}". Attempting fallback...`);
-
-                                try {
-                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                                    fetch(dataUrl)
-                                        .then(res => res.blob())
-                                        .then(fallbackBlob => {
-                                            pendingCountRef.current--;
-                                            if (fallbackBlob) {
-                                                const optimizedFile = new File([fallbackBlob], file.name.replace(/\.\w+$/, '.jpg'), {
-                                                    type: 'image/jpeg',
-                                                });
-                                                onAdd({
-                                                    file: optimizedFile,
-                                                    preview: dataUrl,
-                                                });
-                                            } else {
-                                                throw new Error('Fallback blob creation failed');
-                                            }
-                                        }).catch(() => {
-                                            pendingCountRef.current--;
-                                            toast.error(`Failed to process "${file.name}".`);
-                                        });
-                                } catch (error) {
-                                    pendingCountRef.current--;
-                                    toast.error(`Failed to process "${file.name}". Please try again.`);
-                                }
+                                console.error(`Failed to create blob for "${file.name}".`);
+                                pendingCountRef.current--;
+                                toast.error(`Failed to process "${file.name}". Please try again.`);
                                 return;
                             }
 
@@ -264,6 +240,8 @@ export default function ImageUpload({
                                 <img
                                     src={img.preview}
                                     alt={`Image ${index + 1}`}
+                                    width={200}
+                                    height={200}
                                     className="w-full h-full object-cover"
                                 />
                                 {/* Overlay with file info */}

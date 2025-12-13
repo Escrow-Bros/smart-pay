@@ -8,6 +8,13 @@ import { Briefcase, CheckCircle2, Clock, AlertTriangle, RotateCcw, MapPin, Image
 
 type FilterStatus = 'ALL' | 'COMPLETED' | 'PAYMENT_PENDING' | 'DISPUTED' | 'REFUNDED';
 
+// Safe timestamp parser
+const getTimestamp = (dateStr: string | undefined): number => {
+    if (!dateStr) return 0;
+    const time = new Date(dateStr).getTime();
+    return isNaN(time) ? 0 : time;
+};
+
 export default function WorkerHistoryPage() {
     const { state } = useApp();
     const [filter, setFilter] = useState<FilterStatus>('ALL');
@@ -19,12 +26,6 @@ export default function WorkerHistoryPage() {
         const uniqueJobs = Array.from(
             new Map(allJobs.map(job => [job.job_id, job])).values()
         );
-
-        const getTimestamp = (dateStr: string | undefined): number => {
-            if (!dateStr) return 0;
-            const time = new Date(dateStr).getTime();
-            return isNaN(time) ? 0 : time;
-        };
 
         return uniqueJobs.sort((a, b) =>
             getTimestamp(b.assigned_at || b.created_at) -
@@ -210,10 +211,8 @@ export default function WorkerHistoryPage() {
                                         </div>
                                         <span className="text-slate-500 text-xs">
                                             • {(() => {
-                                                const dateStr = job.assigned_at || job.created_at;
-                                                if (!dateStr) return 'Unknown date';
-                                                const time = new Date(dateStr).getTime();
-                                                return isNaN(time) ? 'Unknown date' : new Date(dateStr).toLocaleDateString();
+                                                const time = getTimestamp(job.assigned_at || job.created_at);
+                                                return time === 0 ? 'Unknown date' : new Date(time).toLocaleDateString();
                                             })()}
                                         </span>
                                     </div>

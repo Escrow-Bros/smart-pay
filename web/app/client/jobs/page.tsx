@@ -62,11 +62,12 @@ export default function ClientJobsPage() {
                     {state.clientJobs.map((job, index) => {
                         const { gas, usd } = formatGasWithUSD(job.amount);
                         const statusConfig = getStatusConfig(job.status);
+                        const staggerClass = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'][index % 4];
 
                         return (
                             <div
                                 key={job.job_id}
-                                className={`group relative glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all duration-300 animate-fade-in-up stagger-${(index % 4) + 1}`}
+                                className={`group relative glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all duration-300 animate-fade-in-up ${staggerClass}`}
                             >
                                 {/* Gradient overlay on hover */}
                                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
@@ -112,6 +113,8 @@ export default function ClientJobsPage() {
                                                         <img
                                                             src={photo}
                                                             alt={`Reference ${i + 1}`}
+                                                            width={64}
+                                                            height={64}
                                                             loading="lazy"
                                                             decoding="async"
                                                             referrerPolicy="no-referrer"
@@ -144,6 +147,8 @@ export default function ClientJobsPage() {
                                                         <img
                                                             src={photo}
                                                             alt={`Proof ${i + 1}`}
+                                                            width={56}
+                                                            height={56}
                                                             loading="lazy"
                                                             decoding="async"
                                                             referrerPolicy="no-referrer"
