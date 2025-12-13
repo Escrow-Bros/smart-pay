@@ -483,7 +483,7 @@ export default function ImageUpload({
             }
 
             {/* Helper Text */}
-            <div className="flex items-start gap-2 text-xs text-slate-500 px-1">
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-500 px-1 mt-4 text-center">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 text-slate-600" />
                 <p>
                     Supported formats: JPG, PNG. Max size: 5MB.
