@@ -1955,14 +1955,14 @@ async def resolve_dispute(request: DisputeResolve):
         # Broadcast resolution to worker and client
         resolution_message = {
             "type": "DISPUTE_RESOLVED",
-            "job_id": request.job_id,
-            "status": "COMPLETED" if resolution == "worker_won" else "CANCELLED",
+            "job_id": dispute['job_id'],
+            "status": "COMPLETED" if resolution == "APPROVED" else "CANCELLED",
             "message": f"Dispute resolved: {resolution}. {request.resolution_notes}",
             "resolution": resolution,
             "tx_hash": blockchain_result.get("tx_hash")
         }
         
-        job = db.get_job(request.job_id)
+        job = db.get_job(dispute['job_id'])
         if job:
             if job.get("worker_address"):
                 await websocket_manager.broadcast_to_client(job["worker_address"], resolution_message)
