@@ -12,6 +12,7 @@ export default function WorkerJobsPage() {
     const isAnyClaiming = claimingJobId !== null;
 
     const handleClaim = async (jobId: number) => {
+        if (isAnyClaiming) return;
         setClaimingJobId(jobId);
         try {
             await claimJob(jobId);
@@ -108,6 +109,7 @@ export default function WorkerJobsPage() {
                                                         decoding="async"
                                                         referrerPolicy="no-referrer"
                                                         className="w-full h-full object-cover"
+                                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                     />
                                                 </div>
                                             ))}

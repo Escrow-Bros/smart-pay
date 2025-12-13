@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatGasWithUSD } from '@/lib/currency';
 import { useState, useMemo } from 'react';
@@ -47,7 +48,7 @@ export default function WorkerHistoryPage() {
     );
 
     const getStatusConfig = (status: string) => {
-        const configs: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+        const configs: Record<string, { bg: string; text: string; icon: ReactNode }> = {
             'COMPLETED': { bg: 'bg-green-500/20', text: 'text-green-400', icon: <CheckCircle2 className="w-3 h-3" /> },
             'PAYMENT_PENDING': { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: <Clock className="w-3 h-3" /> },
             'LOCKED': { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: <Clock className="w-3 h-3" /> },
@@ -208,7 +209,12 @@ export default function WorkerHistoryPage() {
                                             <span className="text-slate-500 text-sm">≈ {usd}</span>
                                         </div>
                                         <span className="text-slate-500 text-xs">
-                                            • {new Date(job.assigned_at || job.created_at).toLocaleDateString()}
+                                            • {(() => {
+                                                const dateStr = job.assigned_at || job.created_at;
+                                                if (!dateStr) return 'Unknown date';
+                                                const time = new Date(dateStr).getTime();
+                                                return isNaN(time) ? 'Unknown date' : new Date(dateStr).toLocaleDateString();
+                                            })()}
                                         </span>
                                     </div>
 

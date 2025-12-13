@@ -13,25 +13,17 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     const modalRef = useRef<HTMLDivElement>(null);
 
-    if (!photos || photos.length === 0) {
-        return (
-            <div className="text-center py-8 text-slate-500 text-sm">
-                No photos available
-            </div>
-        );
-    }
-
     const openLightbox = (index: number) => setSelectedIndex(index);
     const closeLightbox = () => setSelectedIndex(null);
 
     const goNext = () => {
-        if (selectedIndex !== null) {
+        if (selectedIndex !== null && photos.length > 0) {
             setSelectedIndex((selectedIndex + 1) % photos.length);
         }
     };
 
     const goPrev = () => {
-        if (selectedIndex !== null) {
+        if (selectedIndex !== null && photos.length > 0) {
             setSelectedIndex((selectedIndex - 1 + photos.length) % photos.length);
         }
     };
@@ -56,6 +48,15 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
         4: 'grid-cols-2 sm:grid-cols-4',
     };
 
+    // Early return after all hooks
+    if (!photos || photos.length === 0) {
+        return (
+            <div className="text-center py-8 text-slate-500 text-sm">
+                No photos available
+            </div>
+        );
+    }
+
     return (
         <>
             {title && (
@@ -76,6 +77,7 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
                         <img
                             src={photo}
                             alt={`Photo ${index + 1}`}
+                            loading="lazy"
                             className="w-full h-full object-cover"
                         />
                         {/* Hover overlay */}

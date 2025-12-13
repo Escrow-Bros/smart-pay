@@ -97,6 +97,7 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
                         <button
                             onClick={() => toast.dismiss(t.id)}
                             className="flex-shrink-0 p-1 text-slate-500 hover:text-white transition-colors"
+                            aria-label="Dismiss notification"
                         >
                             ×
                         </button>

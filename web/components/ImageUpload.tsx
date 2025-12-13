@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { UploadedImage } from '@/lib/types';
 import toast from 'react-hot-toast';
 import { ImagePlus, X, Image, AlertCircle } from 'lucide-react';
@@ -21,6 +21,7 @@ export default function ImageUpload({
     label = "Reference Photos"
 }: ImageUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
+    const pendingCountRef = useRef(0);
 
     const remainingSlots = maxImages - images.length;
     const isAtLimit = remainingSlots <= 0;
@@ -37,6 +38,9 @@ export default function ImageUpload({
         let skippedDuplicate = 0;
         let skippedLimit = 0;
 
+        // Calculate effective count including pending uploads
+        const effectiveCount = images.length + pendingCountRef.current;
+
         Array.from(files).forEach((file) => {
             // Check file type
             if (!file.type.startsWith('image/')) {
@@ -50,13 +54,14 @@ export default function ImageUpload({
                 return;
             }
 
-            // Check limit
-            if (images.length + added >= maxImages) {
+            // Check limit with pending count
+            if (effectiveCount + added >= maxImages) {
                 skippedLimit++;
                 return;
             }
 
             added++;
+            pendingCountRef.current++;
 
             // Read and optimize ALL images
             const reader = new FileReader();
@@ -100,6 +105,7 @@ export default function ImageUpload({
                                     fetch(dataUrl)
                                         .then(res => res.blob())
                                         .then(fallbackBlob => {
+                                            pendingCountRef.current--;
                                             if (fallbackBlob) {
                                                 const optimizedFile = new File([fallbackBlob], file.name.replace(/\.\w+$/, '.jpg'), {
                                                     type: 'image/jpeg',
@@ -112,14 +118,17 @@ export default function ImageUpload({
                                                 throw new Error('Fallback blob creation failed');
                                             }
                                         }).catch(() => {
+                                            pendingCountRef.current--;
                                             toast.error(`Failed to process "${file.name}".`);
                                         });
                                 } catch (error) {
+                                    pendingCountRef.current--;
                                     toast.error(`Failed to process "${file.name}". Please try again.`);
                                 }
                                 return;
                             }
 
+                            pendingCountRef.current--;
                             const optimizedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
                                 type: 'image/jpeg',
                             });
@@ -135,11 +144,13 @@ export default function ImageUpload({
                     );
                 };
                 img.onerror = () => {
+                    pendingCountRef.current--;
                     toast.error(`Failed to load "${file.name}". The image may be corrupted.`);
                 };
                 img.src = reader.result as string;
             };
             reader.onerror = () => {
+                pendingCountRef.current--;
                 toast.error(`Failed to read "${file.name}". Please try again.`);
             };
             reader.readAsDataURL(file);

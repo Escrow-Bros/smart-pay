@@ -163,7 +163,9 @@ export default function ClientJobsPage() {
                                             </div>
                                             <div className="flex items-center text-slate-500 text-xs">
                                                 <Clock className="w-3.5 h-3.5 mr-1" />
-                                                {new Date(job.created_at).toLocaleDateString()}
+                                                {job.created_at && !isNaN(new Date(job.created_at).getTime())
+                                                    ? new Date(job.created_at).toLocaleDateString()
+                                                    : 'Unknown date'}
                                             </div>
                                         </div>
 

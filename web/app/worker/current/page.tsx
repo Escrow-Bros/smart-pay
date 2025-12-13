@@ -9,9 +9,9 @@ import { formatGasWithUSD } from '@/lib/currency';
 import toast from 'react-hot-toast';
 import { showPaymentProcessing } from '@/components/PaymentToast';
 import {
-    MapPin, Loader2, ExternalLink, ClipboardCheck, CheckCircle2, Clock,
-    AlertCircle, Eye, X, Info, MapPinned, Briefcase, RefreshCw, Shield,
-    Send, Lightbulb, AlertTriangle, CheckCircle, XCircle, Timer
+    MapPin, Loader2, ClipboardCheck, CheckCircle2, Clock,
+    AlertCircle, Info, MapPinned, Briefcase, RefreshCw,
+    Send, AlertTriangle, CheckCircle
 } from 'lucide-react';
 
 interface TimelineStage {
@@ -914,13 +914,17 @@ export default function WorkerCurrentJobPage() {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md mx-4 shadow-2xl animate-in zoom-in duration-200">
                         {(() => {
-                            const distance = calculateDistance(
-                                detectedLocation.lat,
-                                detectedLocation.lng,
-                                activeJob.latitude,
-                                activeJob.longitude
-                            );
-                            const isNearby = distance <= 300;
+                            // Guard against null/undefined coordinates
+                            const hasValidCoords = activeJob.latitude != null && activeJob.longitude != null;
+                            const distance = hasValidCoords
+                                ? calculateDistance(
+                                    detectedLocation.lat,
+                                    detectedLocation.lng,
+                                    activeJob.latitude,
+                                    activeJob.longitude
+                                )
+                                : null;
+                            const isNearby = distance != null && distance <= 300;
 
                             return (
                                 <>
@@ -946,7 +950,9 @@ export default function WorkerCurrentJobPage() {
                                         <div className="flex justify-between items-center border-t border-slate-700 pt-3">
                                             <span className="text-slate-400 text-sm">Distance to Job</span>
                                             <span className={`text-sm font-bold ${isNearby ? 'text-green-400' : 'text-yellow-400'}`}>
-                                                {distance < 1000 ? `${distance.toFixed(0)}m` : `${(distance / 1000).toFixed(2)}km`}
+                                                {distance != null
+                                                    ? (distance < 1000 ? `${distance.toFixed(0)}m` : `${(distance / 1000).toFixed(2)}km`)
+                                                    : 'N/A'}
                                             </span>
                                         </div>
                                     </div>
@@ -967,7 +973,9 @@ export default function WorkerCurrentJobPage() {
                                                 <AlertTriangle className="h-5 w-5 text-yellow-400 mt-0.5 flex-shrink-0" />
                                                 <div>
                                                     <p className="text-sm text-yellow-300 font-medium">
-                                                        You appear to be {distance.toFixed(0)}m away from the job location.
+                                                        {distance != null
+                                                            ? `You appear to be ${distance.toFixed(0)}m away from the job location.`
+                                                            : 'Unable to calculate distance to job location.'}
                                                     </p>
                                                     <p className="text-sm text-yellow-200/70 mt-1">
                                                         Submissions more than 300m away may be rejected. Make sure you're at the right location.
