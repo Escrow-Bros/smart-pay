@@ -51,7 +51,9 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
             region_name='us-west-1',
             config=Config(
                 signature_version='s3v4',
-                s3={'addressing_style': 'path'}
+                s3={'addressing_style': 'path'},
+                request_checksum_calculation='when_required',
+                response_checksum_validation='when_required'
             )
         )
         
