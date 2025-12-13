@@ -35,7 +35,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
             </div>
 
             {/* Mobile Header */}
-            <div className="md:hidden relative glass border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-50">
+            <div className="md:hidden relative glass border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-40">
                 <div className="flex items-center gap-2">
                     <Scale className="w-5 h-5 text-purple-400" />
                     <span className="text-lg font-bold text-white">AI Tribunal</span>
@@ -55,18 +55,18 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
 
             {/* Mobile Overlay */}
             {isMobileMenuOpen && (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-30 md:hidden"
+                <div
+                    className="fixed inset-0 bg-black/50 z-50 md:hidden"
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
 
             {/* Mobile Menu Drawer */}
             <div className={`
-                fixed top-0 right-0 z-40 md:hidden
+                fixed top-0 right-0 z-[60] md:hidden
                 transform transition-transform duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
-                w-64 bg-slate-900/95 border-l border-slate-800 h-screen
+                w-64 bg-slate-900 border-l border-slate-800 h-screen
             `}>
                 <div className="p-6 border-b border-slate-800">
                     <div className="flex items-center gap-2 mb-2">
@@ -91,7 +91,7 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
                                     ? 'bg-purple-500/20 text-purple-400'
                                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                }`}
+                                    }`}
                             >
                                 <item.icon className="w-5 h-5" />
                                 {item.label}
@@ -154,8 +154,8 @@ export default function TribunalLayout({ children }: { children: ReactNode }) {
                                     key={item.href}
                                     href={item.href}
                                     className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all whitespace-nowrap ${isActive
-                                            ? 'border-purple-500 text-purple-400 bg-purple-500/5'
-                                            : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-800/50'
+                                        ? 'border-purple-500 text-purple-400 bg-purple-500/5'
+                                        : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-800/50'
                                         }`}
                                 >
                                     <item.icon className="w-4 h-4" />
