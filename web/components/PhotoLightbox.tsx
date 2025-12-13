@@ -80,6 +80,7 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
                             width={80}
                             height={80}
                             loading="lazy"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
                             className="w-full h-full object-cover"
                         />
                         {/* Hover overlay */}
@@ -166,6 +167,7 @@ export default function PhotoLightbox({ photos, title, columns = 2 }: PhotoLight
                                         alt={`Thumbnail ${index + 1}`}
                                         width={48}
                                         height={48}
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                         className="w-full h-full object-cover"
                                     />
                                 </button>

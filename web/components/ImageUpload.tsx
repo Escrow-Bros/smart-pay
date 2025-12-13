@@ -41,18 +41,26 @@ export default function ImageUpload({
         // Calculate effective count including pending uploads
         const effectiveCount = images.length + pendingCountRef.current;
 
+        // Track seen files within this batch to prevent duplicates
+        const seenKeys = new Set(
+            images.map(img => `${img.file.name}-${img.file.size}`)
+        );
+
         Array.from(files).forEach((file) => {
+            const key = `${file.name}-${file.size}`;
+
             // Check file type
             if (!file.type.startsWith('image/')) {
                 toast.error(`"${file.name}" is not an image file.`);
                 return;
             }
 
-            // Check for duplicates
-            if (isDuplicate(file)) {
+            // Check for duplicates (both existing and within this batch)
+            if (seenKeys.has(key) || isDuplicate(file)) {
                 skippedDuplicate++;
                 return;
             }
+            seenKeys.add(key);
 
             // Check limit with pending count
             if (effectiveCount + added >= maxImages) {
@@ -89,6 +97,7 @@ export default function ImageUpload({
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     if (!ctx) {
+                        pendingCountRef.current--;
                         toast.error(`Failed to process "${file.name}". Please try again.`);
                         return;
                     }
@@ -254,7 +263,7 @@ export default function ImageUpload({
                                 {/* Remove button */}
                                 <button
                                     onClick={() => onRemove(index)}
-                                    className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
                                     aria-label="Remove image"
                                 >
                                     <X className="h-4 w-4 text-white" />

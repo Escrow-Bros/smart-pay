@@ -15,6 +15,12 @@ const getTimestamp = (dateStr: string | undefined): number => {
     return isNaN(time) ? 0 : time;
 };
 
+// Format date with fallback
+const formatDate = (dateStr: string | undefined): string => {
+    const time = getTimestamp(dateStr);
+    return time === 0 ? 'Unknown date' : new Date(time).toLocaleDateString();
+};
+
 export default function WorkerHistoryPage() {
     const { state } = useApp();
     const [filter, setFilter] = useState<FilterStatus>('ALL');
@@ -152,11 +158,12 @@ export default function WorkerHistoryPage() {
                         const { gas, usd } = formatGasWithUSD(job.amount);
                         const isActive = ['LOCKED', 'PAYMENT_PENDING', 'DISPUTED'].includes(job.status);
                         const statusConfig = getStatusConfig(job.status);
+                        const staggerClass = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'][index % 4];
 
                         return (
                             <div
                                 key={job.job_id}
-                                className={`group glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all animate-fade-in-up stagger-${(index % 4) + 1}`}
+                                className={`group glass border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover-glow-cyan transition-all animate-fade-in-up ${staggerClass}`}
                             >
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="flex items-center gap-3">
@@ -210,10 +217,7 @@ export default function WorkerHistoryPage() {
                                             <span className="text-slate-500 text-sm">≈ {usd}</span>
                                         </div>
                                         <span className="text-slate-500 text-xs">
-                                            • {(() => {
-                                                const time = getTimestamp(job.assigned_at || job.created_at);
-                                                return time === 0 ? 'Unknown date' : new Date(time).toLocaleDateString();
-                                            })()}
+                                            • {formatDate(job.assigned_at || job.created_at)}
                                         </span>
                                     </div>
 
