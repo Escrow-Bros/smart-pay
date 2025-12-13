@@ -7,7 +7,7 @@ interface PaymentToastProps {
     gasAmount: string;
     usdAmount?: string;
     txHash?: string;
-    type: 'received' | 'sent' | 'confirmed';
+    type: 'received' | 'sent' | 'confirmed' | 'processing';
     jobId?: number;
 }
 
@@ -17,27 +17,31 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
         received: 'Payment Received!',
         sent: 'Payment Sent!',
         confirmed: 'Payment Confirmed!',
+        processing: 'Work Submitted!',
     };
 
     const icons = {
         received: '💰',
         sent: '📤',
         confirmed: '✅',
+        processing: '⏳',
     };
+
+    const isProcessing = type === 'processing';
 
     toast.custom(
         (t) => (
             <div
                 className={`${t.visible ? 'animate-in slide-in-from-right fade-in' : 'animate-out slide-out-to-right fade-out'
-                    } max-w-md w-full bg-gradient-to-br from-green-900/90 via-slate-900/95 to-slate-900/90 backdrop-blur-xl border border-green-500/30 shadow-2xl shadow-green-500/20 rounded-2xl pointer-events-auto overflow-hidden`}
+                    } max-w-md w-full bg-gradient-to-br ${isProcessing ? 'from-yellow-900/90 via-slate-900/95 to-slate-900/90 border-yellow-500/30 shadow-yellow-500/20' : 'from-green-900/90 via-slate-900/95 to-slate-900/90 border-green-500/30 shadow-green-500/20'} backdrop-blur-xl border shadow-2xl rounded-2xl pointer-events-auto overflow-hidden`}
             >
                 {/* Top accent bar */}
-                <div className="h-1 bg-gradient-to-r from-green-500 via-cyan-500 to-green-500 animate-pulse" />
+                <div className={`h-1 bg-gradient-to-r ${isProcessing ? 'from-yellow-500 via-orange-500 to-yellow-500' : 'from-green-500 via-cyan-500 to-green-500'} animate-pulse`} />
 
                 <div className="p-4">
                     <div className="flex items-start gap-3">
                         {/* Icon */}
-                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center animate-bounce-subtle">
+                        <div className={`flex-shrink-0 w-12 h-12 rounded-full ${isProcessing ? 'bg-yellow-500/20 border-yellow-500/30' : 'bg-green-500/20 border-green-500/30'} border flex items-center justify-center animate-bounce-subtle`}>
                             <span className="text-2xl">{icons[type]}</span>
                         </div>
 
@@ -58,7 +62,7 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
 
                             {/* Amount */}
                             <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-bold text-green-400">
+                                <span className={`text-2xl font-bold ${isProcessing ? 'text-yellow-400' : 'text-green-400'}`}>
                                     {gasAmount} GAS
                                 </span>
                                 {usdAmount && (
@@ -67,6 +71,13 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
                                     </span>
                                 )}
                             </div>
+
+                            {/* Processing message */}
+                            {isProcessing && (
+                                <p className="text-xs text-yellow-300/70 mt-1">
+                                    Verifying work... Payment will be sent once confirmed.
+                                </p>
+                            )}
 
                             {/* Transaction link */}
                             {txHash && (
@@ -111,4 +122,8 @@ export function showPaymentSent(gasAmount: string, usdAmount?: string, jobId?: n
 
 export function showPaymentConfirmed(gasAmount: string, usdAmount?: string, jobId?: number, txHash?: string) {
     showPaymentToast({ gasAmount, usdAmount, type: 'confirmed', jobId, txHash });
+}
+
+export function showPaymentProcessing(gasAmount: string, usdAmount?: string, jobId?: number) {
+    showPaymentToast({ gasAmount, usdAmount, type: 'processing', jobId });
 }

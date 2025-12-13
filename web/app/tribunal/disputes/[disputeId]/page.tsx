@@ -24,10 +24,12 @@ export default function DisputeDetailPage() {
     }, [disputeId]);
 
     const fetchDispute = async () => {
+        setIsLoading(true);
         try {
             const response = await fetch(
                 `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/disputes/${disputeId}`
             );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
             if (data.success) {
@@ -71,7 +73,8 @@ export default function DisputeDetailPage() {
             const data = await response.json();
 
             if (data.success) {
-                toast.success(`Dispute resolved! TX: ${data.transaction.tx_hash.slice(0, 10)}...`, {
+                const txHash: string | undefined = data?.transaction?.tx_hash;
+                toast.success(txHash ? `Dispute resolved! TX: ${txHash.slice(0, 10)}...` : 'Dispute resolved!', {
                     duration: 5000,
                     position: 'top-center',
                 });

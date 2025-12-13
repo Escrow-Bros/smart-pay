@@ -7,7 +7,7 @@ import ImageUpload from '@/components/ImageUpload';
 import { JobDict, UploadedImage } from '@/lib/types';
 import { formatGasWithUSD } from '@/lib/currency';
 import toast from 'react-hot-toast';
-import { showPaymentReceived } from '@/components/PaymentToast';
+import { showPaymentProcessing } from '@/components/PaymentToast';
 import {
     MapPin, Loader2, ExternalLink, ClipboardCheck, CheckCircle2, Clock,
     AlertCircle, Eye, X, Info, MapPinned, Briefcase, RefreshCw, Shield,
@@ -343,7 +343,7 @@ export default function WorkerCurrentJobPage() {
 
             if (result.success) {
                 const { gas, usd } = formatGasWithUSD(activeJob.amount);
-                showPaymentReceived(gas, usd, activeJob.job_id);
+                showPaymentProcessing(gas, usd, activeJob.job_id);
                 setProofImages([]);
                 setSelectedJob(null);  // Clear selection to show updated job
                 await fetchData();  // Refresh to show PAYMENT_PENDING status
@@ -988,8 +988,8 @@ export default function WorkerCurrentJobPage() {
                                         <button
                                             onClick={handleConfirmLocation}
                                             className={`flex-1 px-4 py-3 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2 ${isNearby
-                                                    ? 'bg-green-600 hover:bg-green-500'
-                                                    : 'bg-yellow-600 hover:bg-yellow-500'
+                                                ? 'bg-green-600 hover:bg-green-500'
+                                                : 'bg-yellow-600 hover:bg-yellow-500'
                                                 }`}
                                         >
                                             <CheckCircle2 className="h-4 w-4" />

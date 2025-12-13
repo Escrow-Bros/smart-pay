@@ -97,22 +97,23 @@ export default function ImageUpload({
 
                                 try {
                                     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                                    const response = fetch(dataUrl);
-                                    response.then(res => res.blob()).then(fallbackBlob => {
-                                        if (fallbackBlob) {
-                                            const optimizedFile = new File([fallbackBlob], file.name.replace(/\.\w+$/, '.jpg'), {
-                                                type: 'image/jpeg',
-                                            });
-                                            onAdd({
-                                                file: optimizedFile,
-                                                preview: dataUrl,
-                                            });
-                                        } else {
-                                            throw new Error('Fallback blob creation failed');
-                                        }
-                                    }).catch(() => {
-                                        toast.error(`Failed to process "${file.name}".`);
-                                    });
+                                    fetch(dataUrl)
+                                        .then(res => res.blob())
+                                        .then(fallbackBlob => {
+                                            if (fallbackBlob) {
+                                                const optimizedFile = new File([fallbackBlob], file.name.replace(/\.\w+$/, '.jpg'), {
+                                                    type: 'image/jpeg',
+                                                });
+                                                onAdd({
+                                                    file: optimizedFile,
+                                                    preview: dataUrl,
+                                                });
+                                            } else {
+                                                throw new Error('Fallback blob creation failed');
+                                            }
+                                        }).catch(() => {
+                                            toast.error(`Failed to process "${file.name}".`);
+                                        });
                                 } catch (error) {
                                     toast.error(`Failed to process "${file.name}". Please try again.`);
                                 }
@@ -179,8 +180,8 @@ export default function ImageUpload({
                     {label}
                 </label>
                 <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isAtLimit
-                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                        : 'bg-slate-800/50 text-slate-400 border border-slate-700'
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    : 'bg-slate-800/50 text-slate-400 border border-slate-700'
                     }`}>
                     <Image className="w-3.5 h-3.5" />
                     {images.length}/{maxImages}
@@ -193,10 +194,10 @@ export default function ImageUpload({
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 className={`border-2 border-dashed rounded-xl sm:rounded-2xl p-6 sm:p-8 transition-all ${isAtLimit
-                        ? 'border-slate-700 bg-slate-900/30 cursor-not-allowed opacity-60'
-                        : isDragging
-                            ? 'border-cyan-500 bg-cyan-500/5 cursor-pointer'
-                            : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50 cursor-pointer'
+                    ? 'border-slate-700 bg-slate-900/30 cursor-not-allowed opacity-60'
+                    : isDragging
+                        ? 'border-cyan-500 bg-cyan-500/5 cursor-pointer'
+                        : 'border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50 cursor-pointer'
                     }`}
             >
                 <label className={`flex flex-col items-center justify-center ${isAtLimit ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
@@ -209,8 +210,8 @@ export default function ImageUpload({
                         disabled={isAtLimit}
                     />
                     <div className={`p-4 rounded-full mb-4 transition-colors ${isAtLimit
-                            ? 'bg-slate-800/50'
-                            : isDragging ? 'bg-cyan-500/20' : 'bg-slate-800'
+                        ? 'bg-slate-800/50'
+                        : isDragging ? 'bg-cyan-500/20' : 'bg-slate-800'
                         }`}>
                         {isAtLimit ? (
                             <AlertCircle className="h-8 w-8 sm:h-10 sm:w-10 text-yellow-500" />
