@@ -81,7 +81,7 @@ export default function WorkerHistoryPage() {
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                 {filterButtons.map(({ label, value, count, color }) => {
                     const isActive = filter === value;
                     const colorClasses: Record<string, string> = {

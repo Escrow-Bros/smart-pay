@@ -151,7 +151,7 @@ function DisputesContent() {
                     </div>
 
                     {/* Status Filters - Only All, Pending, Resolved */}
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 overflow-x-auto pb-2">
                         <FilterButton
                             label="All"
                             count={disputes.length}
@@ -262,8 +262,8 @@ function StatusBadge({ status }: { status: string }) {
 
     return (
         <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${isResolved
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-yellow-500/20 text-yellow-400'
+            ? 'bg-green-500/20 text-green-400'
+            : 'bg-yellow-500/20 text-yellow-400'
             }`}>
             {isResolved ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
             {isResolved ? 'RESOLVED' : 'PENDING'}
