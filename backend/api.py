@@ -446,7 +446,8 @@ async def monitor_transaction_confirmation(job_id: int, tx_hash: str, max_attemp
                     "job_id": job_id,
                     "status": "COMPLETED",
                     "message": "Payment confirmed! Job completed successfully.",
-                    "tx_hash": tx_hash
+                    "tx_hash": tx_hash,
+                    "amount": job.get("amount")
                 }
                 
                 if job.get("worker_address"):
@@ -867,7 +868,8 @@ async def verify_payment_status(job_id: int):
                         "job_id": job_id,
                         "status": "COMPLETED",
                         "message": "Payment confirmed! Job completed successfully.",
-                        "tx_hash": job.get("tx_hash")
+                        "tx_hash": job.get("tx_hash"),
+                        "amount": job.get("amount")
                     }
                 )
             
