@@ -222,7 +222,7 @@ export default function WorkerHistoryPage() {
 
                                     {job.tx_hash && (
                                         <a
-                                            href={`https://dora.coz.io/transaction/neo3/testnet/${job.tx_hash}`}
+                                            href={`https://dora.coz.io/transaction/neo3/testnet/0x${job.tx_hash}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="flex items-center gap-1.5 text-cyan-500 hover:text-cyan-400 text-xs transition-colors"

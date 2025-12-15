@@ -521,11 +521,49 @@ Return ONLY valid JSON:
         
         # Critical Check 1: GPS - Must be within 300m (fraud detection)
         gps_check = comparison.get('gps_verification', {})
-        distance = gps_check.get('distance_meters', 9999)
+        distance = gps_check.get('distance_meters')  # No fallback - None means verification failed
+        
+        # Check if GPS verification actually failed (returned None)
+        if distance is None:
+            # GPS verification failed - couldn't calculate distance
+            return {
+                "verified": False,
+                "confidence": 0.0,
+                "verdict": "REJECTED",
+                "reason": "GPS verification failed - unable to verify worker location",
+                "category": "GPS_VERIFICATION_ERROR",
+                "score": 0,
+                "breakdown": {
+                    "gps_quality": 0,
+                    "visual_location": 0,
+                    "transformation": 0,
+                    "coverage": 0,
+                    "requirements": 0
+                },
+                "issues": [
+                    "GPS verification error - distance calculation failed",
+                    "Possible causes: missing coordinates, invalid GPS data, or system error",
+                    "This is likely a technical issue, not worker fraud"
+                ],
+                "gps_data": {
+                    "distance_meters": None,
+                    "max_allowed_meters": 300.0,
+                    "tier": "error",
+                    "reasoning": gps_check.get('reasoning', 'GPS verification failed'),
+                    "verification_failed": True
+                },
+                "payment_recommended": False,
+                "can_resubmit": True,
+                "suggestions": [
+                    "Check that job has valid GPS coordinates",
+                    "Ensure worker location permissions are granted",
+                    "Contact support if issue persists"
+                ]
+            }
         
         if not gps_check.get('location_match', False):
-            # GPS failed - worker not at job site
-            distance_text = f"{distance:.1f}m" if isinstance(distance, (int, float)) else "unknown"
+            # GPS calculated distance but worker is too far
+            distance_text = f"{distance:.1f}m"
             
             return {
                 "verified": False,
@@ -550,7 +588,8 @@ Return ONLY valid JSON:
                     "distance_meters": distance,
                     "max_allowed_meters": 300.0,
                     "tier": gps_check.get('tier', 'failed'),
-                    "reasoning": gps_check.get('reasoning')
+                    "reasoning": gps_check.get('reasoning'),
+                    "verification_failed": False  # Verification worked, just too far
                 },
                 "payment_recommended": False,
                 "can_resubmit": True,

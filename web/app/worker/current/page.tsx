@@ -622,7 +622,7 @@ export default function WorkerCurrentJobPage() {
                                                         </div>
                                                         {activeJob.tx_hash && (
                                                             <a
-                                                                href={`https://dora.coz.io/transaction/neo3/testnet/${activeJob.tx_hash}`}
+                                                                href={`https://dora.coz.io/transaction/neo3/testnet/0x${activeJob.tx_hash}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="text-xs text-cyan-500 hover:text-cyan-400 flex items-center gap-1"

@@ -246,18 +246,59 @@ export default function DisputeDetailPage() {
                                 <p className="text-xs font-semibold text-purple-300 mb-2 flex items-center gap-2">
                                     <MapPin className="w-4 h-4" /> GPS Verification
                                 </p>
-                                <div className="flex gap-4 text-sm">
-                                    <span className="text-slate-400">
-                                        Distance: <strong className="text-white">
-                                            {dispute.ai_verdict.gps_data.distance_meters != null
-                                                ? `${dispute.ai_verdict.gps_data.distance_meters}m`
-                                                : 'N/A'}
-                                        </strong>
-                                    </span>
-                                    <span className={`font-semibold ${dispute.ai_verdict.gps_data.tier === 'failed' ? 'text-red-400' : 'text-green-400'}`}>
-                                        {dispute.ai_verdict.gps_data.tier?.toUpperCase() || 'N/A'}
-                                    </span>
-                                </div>
+
+                                {/* Check if GPS verification failed (system error) vs distance too far */}
+                                {dispute.ai_verdict.gps_data.verification_failed ? (
+                                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-2">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <AlertTriangle className="w-4 h-4 text-orange-400" />
+                                            <span className="text-sm font-semibold text-orange-400">GPS Verification Error</span>
+                                        </div>
+                                        <p className="text-xs text-orange-300">
+                                            System could not verify location - likely a technical issue, not worker fraud.
+                                        </p>
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            {dispute.ai_verdict.gps_data.reasoning}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-4 text-sm flex-wrap">
+                                        <span className="text-slate-400">
+                                            Distance: <strong className={`${dispute.ai_verdict.gps_data.distance_meters != null &&
+                                                dispute.ai_verdict.gps_data.distance_meters > 300
+                                                ? 'text-red-400'
+                                                : 'text-green-400'
+                                                }`}>
+                                                {dispute.ai_verdict.gps_data.distance_meters != null
+                                                    ? `${dispute.ai_verdict.gps_data.distance_meters}m`
+                                                    : 'N/A'}
+                                            </strong>
+                                        </span>
+                                        <span className={`font-semibold ${dispute.ai_verdict.gps_data.tier === 'failed' ||
+                                            dispute.ai_verdict.gps_data.tier === 'error'
+                                            ? 'text-red-400'
+                                            : dispute.ai_verdict.gps_data.tier === 'excellent'
+                                                ? 'text-green-400'
+                                                : 'text-yellow-400'
+                                            }`}>
+                                            {dispute.ai_verdict.gps_data.tier?.toUpperCase() || 'N/A'}
+                                        </span>
+                                        {dispute.ai_verdict.gps_data.distance_meters != null &&
+                                            dispute.ai_verdict.gps_data.distance_meters > 300 && (
+                                                <span className="text-xs text-red-400">
+                                                    (Max: 300m)
+                                                </span>
+                                            )}
+                                    </div>
+                                )}
+
+                                {/* Show reasoning if available */}
+                                {!dispute.ai_verdict.gps_data.verification_failed &&
+                                    dispute.ai_verdict.gps_data.reasoning && (
+                                        <p className="text-xs text-slate-400 mt-2">
+                                            {dispute.ai_verdict.gps_data.reasoning}
+                                        </p>
+                                    )}
                             </div>
                         )}
                 </div>
@@ -321,7 +362,7 @@ export default function DisputeDetailPage() {
                             <div>
                                 <p className="text-xs text-slate-400 mb-1">Transaction</p>
                                 <a
-                                    href={`https://dora.coz.io/transaction/neo3/testnet/${dispute.transaction_hash}`}
+                                    href={`https://dora.coz.io/transaction/neo3/testnet/0x${dispute.transaction_hash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm"

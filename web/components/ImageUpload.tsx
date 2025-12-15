@@ -141,9 +141,9 @@ export default function ImageUpload({
                 return;
             }
 
-            // Check file size (5MB limit)
-            if (file.size > 5 * 1024 * 1024) {
-                toast.error(`"${file.name}" exceeds the 5MB size limit.`);
+            // Check file size (8MB limit)
+            if (file.size > 8 * 1024 * 1024) {
+                toast.error(`"${file.name}" exceeds the 8MB size limit.`);
                 return;
             }
 
@@ -486,7 +486,7 @@ export default function ImageUpload({
             <div className="flex items-center justify-center gap-2 text-xs text-slate-500 px-1 mt-4 text-center">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 text-slate-600" />
                 <p>
-                    Supported formats: JPG, PNG. Max size: 5MB.
+                    Supported formats: JPG, PNG. Max size: 8MB.
                     <br />
                     Images are analyzed by AI for verification.
                 </p>

@@ -82,7 +82,7 @@ export function showPaymentToast({ gasAmount, usdAmount, txHash, type, jobId }: 
                             {/* Transaction link */}
                             {txHash && (
                                 <a
-                                    href={`https://dora.coz.io/transaction/neo3/testnet/${txHash}`}
+                                    href={`https://dora.coz.io/transaction/neo3/testnet/0x${txHash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="mt-2 inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"

@@ -74,7 +74,7 @@ def upload_to_ipfs(image_bytes: bytes, filename: str = "proof.jpg", max_retries:
                 ipfs_hash = result.get('IpfsHash')
                 if ipfs_hash:
                     # Use Pinata Gateway
-                    public_url = f"https://gateway.pinata.cloud/ipfs/{ipfs_hash}"
+                    public_url = f"https://cloudflare-ipfs.com/ipfs/{ipfs_hash}"
                     print(f"✅ Successfully uploaded to Pinata: {public_url}")
                     return public_url
                 else:
